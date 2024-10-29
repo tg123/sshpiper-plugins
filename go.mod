@@ -7,10 +7,12 @@ replace golang.org/x/crypto => github.com/tg123/sshpiper.crypto v0.27.0-sshpiper
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.16.0
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.8.0
+	github.com/go-sql-driver/mysql v1.5.0
+	github.com/jinzhu/gorm v1.9.16
 	github.com/microsoft/kiota-authentication-azure-go v1.1.0
 	github.com/microsoftgraph/msgraph-sdk-go v1.51.0
 	github.com/sirupsen/logrus v1.9.3
-	github.com/tg123/sshpiper v1.4.2
+	github.com/tg123/sshpiper v1.4.3
 	github.com/urfave/cli/v2 v2.27.5
 )
 
@@ -20,11 +22,16 @@ require (
 	github.com/cjlapao/common-go v0.0.39 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.5 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
+	github.com/denisenkom/go-mssqldb v0.0.0-20191124224453-732737034ffd // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/golang-jwt/jwt/v5 v5.2.1 // indirect
+	github.com/golang-sql/civil v0.0.0-20190719163853-cb61b32ac6fe // indirect
 	github.com/google/uuid v1.6.0 // indirect
+	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
+	github.com/lib/pq v1.1.1 // indirect
+	github.com/mattn/go-sqlite3 v1.14.0 // indirect
 	github.com/microsoft/kiota-abstractions-go v1.7.0 // indirect
 	github.com/microsoft/kiota-http-go v1.4.4 // indirect
 	github.com/microsoft/kiota-serialization-form-go v1.0.0 // indirect
@@ -32,6 +39,7 @@ require (
 	github.com/microsoft/kiota-serialization-multipart-go v1.0.0 // indirect
 	github.com/microsoft/kiota-serialization-text-go v1.0.0 // indirect
 	github.com/microsoftgraph/msgraph-sdk-go-core v1.2.1 // indirect
+	github.com/patrickmn/go-cache v2.1.0+incompatible // indirect
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect

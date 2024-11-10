@@ -2,36 +2,39 @@ package main
 
 import (
 	"crypto/subtle"
+	"fmt"
 
 	"github.com/tg123/sshpiper/libplugin"
 )
 
 type skelpipeWrapper struct {
-	plugin *plugin
-
 	pipe *pipeConfig
 }
 
 type skelpipeFromWrapper struct {
 	skelpipeWrapper
-
-	pipe *pipeConfig
 }
 
-type skelpipePasswordWrapper struct {
+type skelpipeFromPasswordWrapper struct {
 	skelpipeFromWrapper
 }
 
-type skelpipePublicKeyWrapper struct {
+type skelpipeFromPublicKeyWrapper struct {
 	skelpipeFromWrapper
 }
 
 type skelpipeToWrapper struct {
 	skelpipeWrapper
 
-	pipe *pipeConfig
-
 	username string
+}
+
+type skelpipeToPasswordWrapper struct {
+	skelpipeToWrapper
+}
+
+type skelpipeToPrivateKeyWrapper struct {
+	skelpipeToWrapper
 }
 
 func (s *skelpipeWrapper) From() []libplugin.SkelPipeFrom {
@@ -42,11 +45,11 @@ func (s *skelpipeWrapper) From() []libplugin.SkelPipeFrom {
 
 	switch s.pipe.FromType {
 	case authMapTypePassword:
-		return []libplugin.SkelPipeFrom{&skelpipePasswordWrapper{
+		return []libplugin.SkelPipeFrom{&skelpipeFromPasswordWrapper{
 			skelpipeFromWrapper: w,
 		}}
 	case authMapTypePrivateKey:
-		return []libplugin.SkelPipeFrom{&skelpipePublicKeyWrapper{
+		return []libplugin.SkelPipeFrom{&skelpipeFromPublicKeyWrapper{
 			skelpipeFromWrapper: w,
 		}}
 
@@ -72,28 +75,53 @@ func (s *skelpipeToWrapper) KnownHosts(conn libplugin.ConnMetadata) ([]byte, err
 }
 
 func (s *skelpipeFromWrapper) MatchConn(conn libplugin.ConnMetadata) (libplugin.SkelPipeTo, error) {
-	return &skelpipeToWrapper{
-		skelpipeWrapper: s.skelpipeWrapper,
-	}, nil
+
+	switch s.pipe.ToType {
+	case authMapTypePassword:
+		return &skelpipeToPasswordWrapper{
+			skelpipeToWrapper: skelpipeToWrapper{
+				username:        s.pipe.MappedUsername,
+				skelpipeWrapper: s.skelpipeWrapper,
+			},
+		}, nil
+	case authMapTypePrivateKey:
+		return &skelpipeToPrivateKeyWrapper{
+			skelpipeToWrapper: skelpipeToWrapper{
+				username:        s.pipe.MappedUsername,
+				skelpipeWrapper: s.skelpipeWrapper,
+			},
+		}, nil
+	}
+
+	return nil, fmt.Errorf("unsupported authMapType %d", s.pipe.ToType)
 }
 
-func (s *skelpipePasswordWrapper) TestPassword(conn libplugin.ConnMetadata, password []byte) (bool, error) {
+func (s *skelpipeFromPasswordWrapper) TestPassword(conn libplugin.ConnMetadata, password []byte) (bool, error) {
+
+	if s.pipe.FromPassword == "" {
+		// ignore password
+		return true, nil
+	}
+
 	return subtle.ConstantTimeCompare(password, []byte(s.pipe.FromPassword)) == 1, nil
 }
 
-func (s *skelpipePublicKeyWrapper) AuthorizedKeys(conn libplugin.ConnMetadata) ([]byte, error) {
+func (s *skelpipeFromPublicKeyWrapper) AuthorizedKeys(conn libplugin.ConnMetadata) ([]byte, error) {
 	return []byte(s.pipe.FromAuthorizedKeys.Data), nil
 }
 
-func (s *skelpipePublicKeyWrapper) TrustedUserCAKeys(conn libplugin.ConnMetadata) ([]byte, error) {
+func (s *skelpipeFromPublicKeyWrapper) TrustedUserCAKeys(conn libplugin.ConnMetadata) ([]byte, error) {
 	return nil, nil // TODO support this
 }
 
-func (s *skelpipeToWrapper) PrivateKey(conn libplugin.ConnMetadata) ([]byte, []byte, error) {
+func (s *skelpipeToPrivateKeyWrapper) PrivateKey(conn libplugin.ConnMetadata) ([]byte, []byte, error) {
 	return []byte(s.pipe.ToPrivateKey.Data), nil, nil
 }
 
-func (s *skelpipeToWrapper) OverridePassword(conn libplugin.ConnMetadata) ([]byte, error) {
+func (s *skelpipeToPasswordWrapper) OverridePassword(conn libplugin.ConnMetadata) ([]byte, error) {
+	if s.pipe.ToPassword == "" {
+		return nil, nil
+	}
 	return []byte(s.pipe.ToPassword), nil
 }
 
@@ -105,7 +133,6 @@ func (p *plugin) listPipe(conn libplugin.ConnMetadata) ([]libplugin.SkelPipe, er
 	}
 
 	return []libplugin.SkelPipe{&skelpipeWrapper{
-		plugin: p,
-		pipe:   &pipe,
+		pipe: &pipe,
 	}}, nil
 }

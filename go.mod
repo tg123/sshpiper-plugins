@@ -1,4 +1,4 @@
-module github.com/sshpiper-plugins
+module github.com/tg123/sshpiper-plugins
 
 go 1.23.2
 
@@ -7,6 +7,7 @@ replace golang.org/x/crypto => github.com/tg123/sshpiper.crypto v0.27.0-sshpiper
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.16.0
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.8.0
+	github.com/creack/pty v1.1.23
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/jinzhu/gorm v1.9.16
 	github.com/microsoft/kiota-authentication-azure-go v1.1.0

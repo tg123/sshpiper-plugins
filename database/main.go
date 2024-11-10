@@ -19,6 +19,11 @@ func main() {
 				EnvVars:  []string{"SSHPIPERD_DATABASE_DRIVER"},
 				Required: true,
 			},
+			&cli.BoolFlag{
+				Name:    "enable-database-log",
+				Usage:   "enable database log",
+				EnvVars: []string{"SSHPIPERD_DATABASE_ENABLE_DATABASE_LOG"},
+			},
 
 			// sqlite3
 			&cli.StringFlag{
@@ -162,7 +167,7 @@ func main() {
 				backend = &sqliteplugin{
 					File: c.String("sqlite-file"),
 				}
-				
+
 			case "mysql":
 				backend = &mysqlplugin{
 					Host:     c.String("mysql-host"),
@@ -196,14 +201,29 @@ func main() {
 				return nil, fmt.Errorf("unknown driver %s", c.String("driver"))
 			}
 
-			p := &plugin{}
+			p := &plugin{
+				logmode: c.Bool("enable-database-log"),
+			}
 
 			if err := p.Init(backend); err != nil {
 				return nil, err
 			}
 
 			skel := libplugin.NewSkelPlugin(p.listPipe)
-			return skel.CreateConfig(), nil
+			config := skel.CreateConfig()
+
+			origin := config.NextAuthMethodsCallback
+
+			config.NextAuthMethodsCallback = func(conn libplugin.ConnMetadata) ([]string, error) {
+				if conn.User() == "" {
+					return []string{"password", "publickey"}, nil
+				}
+
+
+				return origin(conn)
+			}
+
+			return config, nil
 		},
 	})
 }

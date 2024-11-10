@@ -11,7 +11,8 @@ type createdb interface {
 }
 
 type plugin struct {
-	db *gorm.DB
+	db      *gorm.DB
+	logmode bool
 }
 
 func (p *plugin) Init(backend createdb) error {
@@ -34,16 +35,20 @@ func (p *plugin) Init(backend createdb) error {
 
 	if err != nil {
 		log.Printf("AutoMigrate error: %v", err)
+		return err
 	}
 
-	// TODO add config
-	// db.SetLogger(logger)
-	// db.LogMode(true)
+	db.SetLogger(log.StandardLogger())
+	db.LogMode(p.logmode)
 
 	p.db = db
 
-	// plugin is alive within program lifecycle, close when unload added
-	// defer db.Close()
-
 	return nil
+}
+
+// Close
+func (p *plugin) Close() {
+	if p.db != nil {
+		p.db.Close()
+	}
 }

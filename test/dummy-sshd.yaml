@@ -1,0 +1,30 @@
+services:
+  host-password:
+    image: lscr.io/linuxserver/openssh-server:latest
+    environment:
+      - PASSWORD_ACCESS=true
+      - USER_PASSWORD=pass
+      - USER_NAME=user
+      - LOG_STDOUT=true
+    volumes:
+      - shared:/shared
+      - sshconfig_password:/config
+
+  host-publickey:
+    image: lscr.io/linuxserver/openssh-server:latest
+    environment:
+      - USER_NAME=user
+      - LOG_STDOUT=true
+    volumes:
+      - shared:/shared      
+      - sshconfig_publickey:/config
+
+volumes:
+  shared:
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+
+  sshconfig_publickey:
+
+  sshconfig_password:

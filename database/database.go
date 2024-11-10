@@ -18,7 +18,7 @@ type pipeConfig struct {
 	ToPassword            string
 	ToPrivateKey          keydata
 	ToAuthorizedKeys      keydata
-	NoPassthrough         bool
+	// NoPassthrough         bool
 	KnownHosts            keydata
 	IgnoreHostkey         bool
 }
@@ -39,12 +39,12 @@ func (p *plugin) loadPipeFromDB(conn libplugin.ConnMetadata) (pipeConfig, error)
 		FromType:              d.AuthMapType,
 		FromPassword:          d.Password,
 		FromAuthorizedKeys:    d.AuthorizedKeys,
-		FromAllowAnyPublicKey: d.AllowAnyPublicKey,
+		// FromAllowAnyPublicKey: d.AllowAnyPublicKey,
 		ToType:                d.Upstream.AuthMapType,
 		ToPassword:            d.Upstream.Password,
 		ToPrivateKey:          d.Upstream.PrivateKey,
-		NoPassthrough:         d.NoPassthrough,
-		KnownHosts:            d.Upstream.KnownHosts,
+		// NoPassthrough:         d.NoPassthrough,
+		KnownHosts:            d.Upstream.Server.HostKey,
 		IgnoreHostkey:         d.Upstream.Server.IgnoreHostKey,
 	}
 

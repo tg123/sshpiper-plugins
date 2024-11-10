@@ -1,0 +1,49 @@
+include:
+  - ../test/dummy-sshd.yaml
+
+services:
+
+  testrunner:
+    environment:
+      - SSHPIPERD_LOG_LEVEL=trace
+      - SSHPIPERD_SERVER_KEY_GENERATE_MODE=notexist
+      - SSHPIPERD_DATABASE_ENABLE_DATABASE_LOG=true
+      - SSHPIPERD_DEBUG=${SSHPIPERD_DEBUG}
+      - GOCACHE=/cache/build
+      - GOPATH=/cache/go
+    build: 
+      context: ..
+      dockerfile_inline: |
+        FROM docker.io/golang:1.23-bookworm as builder
+
+        RUN mkdir -p /sshpiperd
+
+        COPY --from=farmer1992/sshpiperd:latest /sshpiperd /sshpiperd
+        RUN mkdir -p /sshpiperd/plugins
+        RUN git config --global --add safe.directory /src
+    volumes:
+      - buildcache:/cache
+      - ..:/src
+      - shared:/shared
+      - sshconfig_publickey:/sshconfig_publickey
+      - sshconfig_password:/sshconfig_password
+    command: 
+      - /bin/bash
+      - -c
+      - |
+        go build -o /sshpiperd/plugins 
+        if [ "${SSHPIPERD_DEBUG}" == "1" ]; then
+          echo "enter debug on hold mode"
+          sleep inf
+        else
+          go test -v
+        fi
+    working_dir: /src/database
+    depends_on:
+      - host-publickey
+      - host-password      
+
+
+volumes:
+  buildcache:
+    driver: local

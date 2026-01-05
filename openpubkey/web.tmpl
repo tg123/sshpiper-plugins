@@ -130,6 +130,7 @@
                 let host = self.parent().find('.ssh-host').val();
                 if (host) {
                     modal.show();
+                    const safeHost = $('<div>').text(host).text();
                     $.post('/approve', {
                         upstream: host,
                         session: session,
@@ -167,7 +168,7 @@
 
                                 if (data.status === 'approved') {
                                     $('#modal .alert').addClass('alert-success');
-                                    $('#modal .alert').text('Approved, ssh to ' + host);
+                                    $('#modal .alert').text('Approved, ssh to ' + safeHost);
                                     final();
                                 }
                             });

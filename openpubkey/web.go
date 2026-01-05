@@ -82,11 +82,27 @@ func (w *web) approve(c *gin.Context) {
 		return
 	}
 
+	if secret, _ := w.sessionstore.GetSecret(session); secret == nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  "invalid or expired session",
+		})
+		return
+	}
+
 	upstream := c.PostForm("upstream")
 	if upstream == "" {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 			"status": "error",
 			"error":  "missing upstream",
+		})
+		return
+	}
+
+	if _, _, _, err := parseUpstream(upstream); err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  "invalid upstream",
 		})
 		return
 	}

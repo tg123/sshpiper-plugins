@@ -31,6 +31,10 @@ func createTestPlugin(backend createdb) *plugin {
 
 func TestSqliteDatabase(t *testing.T) {
 
+	if testing.Short() {
+		t.Skip("skipping database e2e tests in short mode")
+	}
+
 	testdir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)

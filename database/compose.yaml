@@ -33,6 +33,7 @@ services:
       - |
         set -e
         mkdir -p /sshconfig_publickey/.ssh /sshconfig_password/.ssh
+        mkdir -p /sshpiperd/plugins
         go build -o /sshpiperd/plugins/database .
         if [ "${SSHPIPERD_DEBUG}" == "1" ]; then
           echo "enter debug on hold mode"

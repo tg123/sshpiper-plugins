@@ -13,8 +13,6 @@ import (
 
 func generateSshCert(token []byte, signer crypto.Signer, cic *clientinstance.Claims, issuer string) ([]byte, []byte, error) {
 
-	// Use the commitment nonce to complete the OIDC flow and get an ID token from the provider
-	// idToken, err := Op.RequestTokens(context.Background(), string(nonce))
 	idToken := memguard.NewBufferFromBytes(token)
 	defer idToken.Destroy()
 

@@ -28,14 +28,14 @@ func TestParseUpstream(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			host, port, user, err := parseUpstream(tt.input)
+			info, err := parseUpstream(tt.input)
 			if err != nil {
 				t.Fatalf("parseUpstream() error = %v", err)
 			}
 
-			if host != tt.wantHost || port != tt.wantPort || user != tt.wantUser {
+			if info.Host != tt.wantHost || info.Port != tt.wantPort || info.User != tt.wantUser {
 				t.Fatalf("parseUpstream() = (%q, %d, %q), want (%q, %d, %q)",
-					host, port, user, tt.wantHost, tt.wantPort, tt.wantUser)
+					info.Host, info.Port, info.User, tt.wantHost, tt.wantPort, tt.wantUser)
 			}
 		})
 	}

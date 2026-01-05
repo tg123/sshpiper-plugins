@@ -130,7 +130,7 @@
                 let host = self.parent().find('.ssh-host').val();
                 if (host) {
                     modal.show();
-                    const safeHost = $('<div>').text(host).text();
+                    const safeHost = host.replace(/[<>]/g, '');
                     $.post('/approve', {
                         upstream: host,
                         session: session,

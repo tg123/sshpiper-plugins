@@ -99,7 +99,7 @@ func (w *web) approve(c *gin.Context) {
 		return
 	}
 
-	if _, _, _, err := parseUpstream(upstream); err != nil {
+	if _, err := parseUpstream(upstream); err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 			"status": "error",
 			"error":  "invalid upstream",

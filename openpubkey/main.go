@@ -19,6 +19,12 @@ import (
 const errMsgPipeApprove = "ok"
 const errMsgBadUpstream = "bad upstream"
 
+type upstreamInfo struct {
+	Host string
+	Port int
+	User string
+}
+
 func main() {
 	gin.DefaultWriter = os.Stderr
 
@@ -168,7 +174,7 @@ func main() {
 							return nil, err
 						}
 
-						host, port, user, err := parseUpstream(upstream)
+						target, err := parseUpstream(upstream)
 						if err != nil {
 							return nil, err
 						}
@@ -176,9 +182,9 @@ func main() {
 						notifyClient(client, fmt.Sprintf("session approved, connecting to %v", upstream))
 
 						return &libplugin.Upstream{
-							Host:          host,
-							Port:          int32(port),
-							UserName:      user,
+							Host:          target.Host,
+							Port:          int32(target.Port),
+							UserName:      target.User,
 							Auth:          libplugin.CreatePrivateKeyAuth(seckeySshBytes, certBytes),
 							IgnoreHostKey: true,
 						}, nil
@@ -219,17 +225,17 @@ func main() {
 	})
 }
 
-func parseUpstream(data string) (host string, port int, user string, err error) {
-	host = strings.TrimSpace(data)
+func parseUpstream(data string) (info upstreamInfo, err error) {
+	host := strings.TrimSpace(data)
 
 	t := strings.SplitN(host, "@", 2)
 
 	if len(t) > 1 {
-		user = t[0]
+		info.User = t[0]
 		host = t[1]
 	}
 
-	host, port, err = libplugin.SplitHostPortForSSH(host)
+	info.Host, info.Port, err = libplugin.SplitHostPortForSSH(host)
 	return
 }
 

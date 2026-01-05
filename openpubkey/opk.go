@@ -40,12 +40,6 @@ func generateCic(
 		return nil, fmt.Errorf("failed to instantiate client instance claims: %w", err)
 	}
 
-	// Define our OIDC nonce as a commitment to the client instance claims
-	// nonce, err := cic.Hash()
-	// if err != nil {
-	// 	return nil, fmt.Errorf("error getting nonce: %w", err)
-	// }
-
 	return cic, nil
 }
 
@@ -71,7 +65,6 @@ func OidcAuth(
 		return nil, fmt.Errorf("error getting OP public key: %w", err)
 	}
 
-	// if signGQ {
 	rsaPubKey := opKey.(*rsa.PublicKey)
 
 	sv, err := gq.NewSignerVerifier(rsaPubKey, GQSecurityParameter)
@@ -83,7 +76,6 @@ func OidcAuth(
 		return nil, fmt.Errorf("error creating GQ signature: %w", err)
 	}
 	idToken = memguard.NewBufferFromBytes(gqToken)
-	// }
 
 	// Combine our ID token and signature over the cic to create our PK Token
 	pkt, err := pktoken.New(idToken.Bytes(), cicToken)

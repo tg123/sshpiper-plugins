@@ -104,7 +104,7 @@ func main() {
 								lastErrMsg = errMsgBadUpstream
 							}
 
-							_, _ = client("", fmt.Sprintf("connection failed %v", lastErrMsg), "", false)
+							notifyClient(client, fmt.Sprintf("connection failed %v", lastErrMsg))
 							store.SetSshError(session, errMsgBadUpstream) // set already notified
 						}
 
@@ -137,7 +137,7 @@ func main() {
 
 					store.SetNonce(session, nonce)
 
-					_, _ = client("", fmt.Sprintf("please open %v/pipe/%v with your browser to verify (timeout 1m)", baseurl, session), "", false)
+					notifyClient(client, fmt.Sprintf("please open %v/pipe/%v with your browser to verify (timeout 1m)", baseurl, session))
 
 					st := time.Now()
 
@@ -173,7 +173,7 @@ func main() {
 							return nil, err
 						}
 
-						_, _ = client("", fmt.Sprintf("session approved, connecting to %v", upstream), "", false)
+						notifyClient(client, fmt.Sprintf("session approved, connecting to %v", upstream))
 
 						return &libplugin.Upstream{
 							Host:          host,
@@ -231,4 +231,10 @@ func parseUpstream(data string) (host string, port int, user string, err error) 
 
 	host, port, err = libplugin.SplitHostPortForSSH(host)
 	return
+}
+
+func notifyClient(client libplugin.KeyboardInteractiveChallenge, message string) {
+	if _, err := client("", message, "", false); err != nil {
+		log.WithError(err).Debug("failed to send interactive prompt")
+	}
 }

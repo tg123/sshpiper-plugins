@@ -176,10 +176,12 @@ func (w *web) loginCallback(c *gin.Context) {
 		return
 	}
 
-	rp.CodeExchangeHandler(func(_ http.ResponseWriter, _ *http.Request, tokens *oidc.Tokens[*oidc.IDTokenClaims], _ string, _ rp.RelyingParty) {
+	codeExchangeHandler := func(_ http.ResponseWriter, _ *http.Request, tokens *oidc.Tokens[*oidc.IDTokenClaims], _ string, _ rp.RelyingParty) {
 		w.sessionstore.SetSecret(session, []byte(tokens.IDToken))
 		c.HTML(http.StatusOK, templatefile, gin.H{
 			"session": session,
 		})
-	}, w.provider)(c.Writer, c.Request.WithContext(context.WithValue(c.Request.Context(), nonceKey, string(nonce))))
+	}
+
+	rp.CodeExchangeHandler(codeExchangeHandler, w.provider)(c.Writer, c.Request.WithContext(context.WithValue(c.Request.Context(), nonceKey, string(nonce))))
 }

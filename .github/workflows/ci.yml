@@ -20,9 +20,6 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Download modules
-        run: go mod download
-
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
@@ -41,20 +38,11 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Download modules
-        run: go mod download
-
       - name: Build all packages
         run: go build ./...
 
-      - name: Run Go tests (excluding database e2e)
-        run: |
-          packages=$(go list ./... | grep -v '^github.com/tg123/sshpiper-plugins/database$')
-          if [ -n "$packages" ]; then
-            go test $packages
-          else
-            echo "No non-database packages to test"
-          fi
+      - name: Run Go tests (short)
+        run: go test -short -count=1 ./...
 
       - name: Run database e2e tests
         run: docker compose -f database/compose.yaml up --build --abort-on-container-exit --exit-code-from testrunner

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -16,6 +17,8 @@ import (
 const appurl = "https://github.com/apps/sshpiper"
 
 const templatefile = "web.tmpl"
+
+var sessionRegexp = regexp.MustCompile(`^[A-Za-z0-9-]+$`)
 
 type web struct {
 	sessionstore sessionstore
@@ -51,18 +54,17 @@ func (w *web) Run(addr string) error {
 func (w *web) pipe(c *gin.Context) {
 	session := c.Param("session")
 
-	if session == "" {
+	if session == "" || !sessionRegexp.MatchString(session) {
 		c.Redirect(http.StatusTemporaryRedirect, appurl)
 		return
 	}
 
-	// todo is valid session
 	c.Redirect(http.StatusTemporaryRedirect, w.oauth.AuthCodeURL(session))
 }
 
 func (w *web) approve(c *gin.Context) {
 	session := c.Param("session")
-	if session == "" {
+	if session == "" || !sessionRegexp.MatchString(session) {
 		c.Redirect(http.StatusTemporaryRedirect, appurl)
 		return
 	}
@@ -112,7 +114,7 @@ func (w *web) oauth2callback(c *gin.Context) {
 	code := c.Query("code")
 	session := c.Query("state")
 
-	if code == "" || session == "" {
+	if code == "" || session == "" || !sessionRegexp.MatchString(session) {
 		c.Redirect(http.StatusTemporaryRedirect, appurl)
 		return
 	}
@@ -157,6 +159,10 @@ func (w *web) oauth2callback(c *gin.Context) {
 		}
 
 		fullname := strings.Split(*repo.FullName, "/")
+		if len(fullname) != 2 {
+			errors = append(errors, fmt.Sprintf("unexpected repo full name %q", *repo.FullName))
+			continue
+		}
 		owner := fullname[0]
 		reponame := fullname[1]
 		conf, _, _, err := client.Repositories.GetContents(context.Background(), owner, reponame, "sshpiper.yaml", nil)

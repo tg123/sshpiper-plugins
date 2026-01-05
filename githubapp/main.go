@@ -3,15 +3,17 @@ package main
 import (
 	"bytes"
 	"context"
+	crand "crypto/rand"
 	"encoding/base64"
 	"fmt"
-	"math/rand"
+	"math/big"
 	"net"
 	"os"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sethvargo/go-limiter/memorystore"
+	log "github.com/sirupsen/logrus"
 	"github.com/tg123/sshpiper/libplugin"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/oauth2"
@@ -71,7 +73,9 @@ func main() {
 			}
 
 			go func() {
-				panic(w.Run(c.String("webaddr")))
+				if err := w.Run(c.String("webaddr")); err != nil {
+					log.WithError(err).Fatal("githubapp web server exited")
+				}
 			}()
 
 			limiter, err := memorystore.New(&memorystore.Config{
@@ -155,7 +159,11 @@ func main() {
 						}
 
 						// choose random ip from resolveips
-						selectedip := resolvedips[rand.Intn(len(resolvedips))]
+						idx, err := crand.Int(crand.Reader, big.NewInt(int64(len(resolvedips))))
+						if err != nil {
+							return nil, err
+						}
+						selectedip := resolvedips[idx.Int64()]
 
 						hosttoshow := upstream.Host
 

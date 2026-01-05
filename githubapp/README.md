@@ -12,7 +12,7 @@ this is a plugin to [sshpiper](https://github.com/tg123/sshpiper)
 upstreams:
   # pipe to example@github.com with password `fake`
   - host: github.com
-     username: exmaple
+     username: example
      password: fake
    ```
    

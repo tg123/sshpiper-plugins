@@ -8,6 +8,11 @@ import (
 	"io"
 )
 
+const (
+	nonceSize  = 12
+	aesKeySize = 16
+)
+
 func encrypt(text string, key []byte) (string, error) {
 	if text == "" {
 		return "", nil
@@ -20,7 +25,7 @@ func encrypt(text string, key []byte) (string, error) {
 		return "", err
 	}
 
-	nonce := make([]byte, 12)
+	nonce := make([]byte, nonceSize)
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
 		return "", err
 	}
@@ -49,14 +54,14 @@ func decrypt(text string, key []byte) (string, error) {
 		return "", err
 	}
 
-	nonce := ciphertext[:12]
+	nonce := ciphertext[:nonceSize]
 
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
 		return "", err
 	}
 
-	plaintext, err := gcm.Open(nil, nonce, ciphertext[12:], nil)
+	plaintext, err := gcm.Open(nil, nonce, ciphertext[nonceSize:], nil)
 	if err != nil {
 		return "", err
 	}
@@ -65,7 +70,7 @@ func decrypt(text string, key []byte) (string, error) {
 }
 
 func randomkey() ([]byte, error) {
-	key := make([]byte, 16)
+	key := make([]byte, aesKeySize)
 	if _, err := io.ReadFull(rand.Reader, key); err != nil {
 		return nil, err
 	}

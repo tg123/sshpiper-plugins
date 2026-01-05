@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/tg123/sshpiper/libplugin"
+	"github.com/tg123/sshpiper/libplugin/skel"
 	"github.com/urfave/cli/v2"
 )
 
@@ -209,8 +210,8 @@ func main() {
 				return nil, err
 			}
 
-			skel := libplugin.NewSkelPlugin(p.listPipe)
-			config := skel.CreateConfig()
+			skelPlugin := skel.NewSkelPlugin(p.listPipe)
+			config := skelPlugin.CreateConfig()
 
 			origin := config.NextAuthMethodsCallback
 
@@ -218,7 +219,6 @@ func main() {
 				if conn.User() == "" {
 					return []string{"password", "publickey"}, nil
 				}
-
 
 				return origin(conn)
 			}

@@ -56,7 +56,9 @@ func newWeb(config oidcconfig, sessionstore sessionstore) (*web, error) {
 	}
 
 	r.GET("/", func(c *gin.Context) {
-		c.HTML(http.StatusOK, templatefile, gin.H{})
+		c.HTML(http.StatusOK, templatefile, gin.H{
+			"session": "",
+		})
 	})
 	r.GET("/pipe/:session", w.pipe)
 	r.GET("/lasterr/:session", w.lasterr)

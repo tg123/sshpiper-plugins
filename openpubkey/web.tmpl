@@ -38,7 +38,7 @@
         </div>
         <div class="alert alert-info" role="alert">
             Check the <a href="https://github.com/tg123/sshpiper-openpubkey">upstream README</a> for how to set up SSH
-            to accept Google Public Key using openpubkey
+            to accept OpenPubKey certificates from your OIDC provider
         </div>
         <div class="alert alert-light">
             Edit your target sshd address below, hosts are saved in browser's local storage
@@ -92,7 +92,7 @@
     <script>
         jQuery(function ($) {
 
-            const session = $('#session').val();
+            const session = $('#session').val() || '';
 
             const modal = new bootstrap.Modal('#modal', {
                 keyboard: false
@@ -112,7 +112,7 @@
                     }
                 }
 
-                self.parent().find('.ssh-go-btn').prop('disabled', self.val().trim() === '' || session === '');
+                self.parent().find('.ssh-go-btn').prop('disabled', self.val().trim() === '' || !session);
 
                 if ($('.ssh-host').last().val() !== '') {
                     sshRow.clone(true).appendTo(rowContainer).hide().show('slow');

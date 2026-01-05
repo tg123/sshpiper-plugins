@@ -96,15 +96,15 @@ func main() {
 
 					// retry
 					if lasterr != nil {
-
-						if *lasterr != errMsgBadUpstream {
+						lastErrMsg := *lasterr
+						if lastErrMsg != errMsgBadUpstream {
 
 							// retry with no err set, using default err
-							if *lasterr == "" {
-								*lasterr = errMsgBadUpstream
+							if lastErrMsg == "" {
+								lastErrMsg = errMsgBadUpstream
 							}
 
-							_, _ = client("", fmt.Sprintf("connection failed %v", *lasterr), "", false)
+							_, _ = client("", fmt.Sprintf("connection failed %v", lastErrMsg), "", false)
 							store.SetSshError(session, errMsgBadUpstream) // set already notified
 						}
 

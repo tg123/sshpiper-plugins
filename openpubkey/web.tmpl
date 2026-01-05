@@ -13,7 +13,7 @@
 </head>
 
 <body>
-    <!-- fuck too hard to do web ui,  -->
+    <!-- minimal web ui -->
     <div class="container">
         <header class="d-flex flex-wrap justify-content-center py-3 mb-4 border-bottom">
             <a href="/" class="d-flex align-items-center mb-3 mb-md-0 me-md-auto text-dark text-decoration-none">
@@ -37,8 +37,8 @@
             <b>ssh opk.sshpiper.com</b> # run from your terminal to test
         </div>
         <div class="alert alert-info" role="alert">
-            Check <a href="https://github.com/tg123/sshpiper-openpubkey/tree/main/exmaple/sshd">HERE</a> about how to
-            setup ssh to accept Google Public Key using openpubkey
+            Check the <a href="https://github.com/tg123/sshpiper-openpubkey">upstream README</a> for how to set up SSH
+            to accept Google Public Key using openpubkey
         </div>
         <div class="alert alert-light">
             Edit your target sshd address below, hosts are saved in browser's local storage
@@ -115,7 +115,7 @@
                 self.parent().find('.ssh-go-btn').prop('disabled', self.val().trim() === '' || session === '');
 
                 if ($('.ssh-host').last().val() !== '') {
-                    sshRow.clone(true).appendTo(rowContainer).hide().show('slow');;
+                    sshRow.clone(true).appendTo(rowContainer).hide().show('slow');
                 }
 
             });

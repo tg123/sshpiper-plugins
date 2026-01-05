@@ -40,7 +40,11 @@ func (s *sessionstoreMemory) GetNonce(session string) ([]byte, error) {
 		return nil, nil
 	}
 
-	return nonce.([]byte), nil
+	if b, ok := nonce.([]byte); ok {
+		return b, nil
+	}
+
+	return nil, nil
 }
 
 func (s *sessionstoreMemory) SetNonce(session string, nonce []byte) error {
@@ -54,7 +58,11 @@ func (s *sessionstoreMemory) GetSecret(session string) ([]byte, error) {
 		return nil, nil
 	}
 
-	return secret.([]byte), nil
+	if b, ok := secret.([]byte); ok {
+		return b, nil
+	}
+
+	return nil, nil
 }
 
 func (s *sessionstoreMemory) SetSecret(session string, secret []byte) error {
@@ -68,7 +76,11 @@ func (s *sessionstoreMemory) GetUpstream(session string) (string, error) {
 		return "", nil
 	}
 
-	return upstream.(string), nil
+	if u, ok := upstream.(string); ok {
+		return u, nil
+	}
+
+	return "", nil
 }
 
 func (s *sessionstoreMemory) SetUpstream(session string, upstream string) error {
@@ -87,7 +99,11 @@ func (s *sessionstoreMemory) GetSshError(session string) (err *string) {
 		return nil
 	}
 
-	return ssherror.(*string)
+	if v, ok := ssherror.(*string); ok {
+		return v
+	}
+
+	return nil
 }
 
 func (s *sessionstoreMemory) DeleteSession(session string, keeperr bool) error {

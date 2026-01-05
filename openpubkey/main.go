@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/openpubkey/openpubkey/util"
 	"github.com/sethvargo/go-limiter/memorystore"
+	log "github.com/sirupsen/logrus"
 	"github.com/tg123/sshpiper/libplugin"
 	"github.com/urfave/cli/v2"
 )
@@ -73,7 +74,9 @@ func main() {
 			}
 
 			go func() {
-				panic(w.Run(c.String("webaddr")))
+				if err := w.Run(c.String("webaddr")); err != nil {
+					log.WithError(err).Error("openpubkey web server exited")
+				}
 			}()
 
 			limiter, err := memorystore.New(&memorystore.Config{

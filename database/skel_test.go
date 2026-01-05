@@ -12,7 +12,7 @@ import (
 )
 
 func TestKnownHostsBuildsFromPrivateKey(t *testing.T) {
-	key, err := rsa.GenerateKey(rand.Reader, 1024)
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatalf("failed to generate test key: %v", err)
 	}

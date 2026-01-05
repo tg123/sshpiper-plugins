@@ -3,8 +3,11 @@ package main
 import (
 	"crypto/subtle"
 	"fmt"
+	"strings"
 
 	"github.com/tg123/sshpiper/libplugin"
+	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/knownhosts"
 )
 
 type skelpipeWrapper struct {
@@ -71,7 +74,21 @@ func (s *skelpipeToWrapper) IgnoreHostKey(conn libplugin.ConnMetadata) bool {
 }
 
 func (s *skelpipeToWrapper) KnownHosts(conn libplugin.ConnMetadata) ([]byte, error) {
-	return []byte(s.pipe.KnownHosts.Data), nil
+	data := strings.TrimSpace(s.pipe.KnownHosts.Data)
+
+	if data == "" {
+		return nil, nil
+	}
+
+	if pub, _, _, _, err := ssh.ParseAuthorizedKey([]byte(data)); err == nil {
+		return []byte(knownhosts.Line([]string{s.pipe.UpstreamHost}, pub)), nil
+	}
+
+	if signer, err := ssh.ParsePrivateKey([]byte(data)); err == nil {
+		return []byte(knownhosts.Line([]string{s.pipe.UpstreamHost}, signer.PublicKey())), nil
+	}
+
+	return []byte(data), nil
 }
 
 func (s *skelpipeFromWrapper) MatchConn(conn libplugin.ConnMetadata) (libplugin.SkelPipeTo, error) {

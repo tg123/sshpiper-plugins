@@ -14,7 +14,7 @@ services:
     build: 
       context: ..
       dockerfile_inline: |
-        FROM docker.io/golang:1.23-bookworm as builder
+        FROM docker.io/golang:1.25-bookworm as builder
 
         RUN mkdir -p /sshpiperd
 
@@ -31,12 +31,15 @@ services:
       - /bin/bash
       - -c
       - |
-        go build -o /sshpiperd/plugins 
+        set -e
+        mkdir -p /sshconfig_publickey/.ssh /sshconfig_password/.ssh
+        mkdir -p /sshpiperd/plugins
+        go build -o /sshpiperd/plugins/database .
         if [ "${SSHPIPERD_DEBUG}" == "1" ]; then
           echo "enter debug on hold mode"
           sleep inf
         else
-          go test -v
+          go test -v -tags e2e ./...
         fi
     working_dir: /src/database
     depends_on:

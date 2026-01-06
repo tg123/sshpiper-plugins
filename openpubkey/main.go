@@ -155,7 +155,7 @@ func main() {
 
 						lasterr := store.GetSshError(session)
 						if lasterr != nil && *lasterr != "" {
-							return nil, fmt.Errorf(*lasterr)
+							return nil, fmt.Errorf("%s", *lasterr)
 						}
 
 						upstream, _ := store.GetUpstream(session)

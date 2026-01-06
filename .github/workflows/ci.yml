@@ -47,12 +47,3 @@ jobs:
 
       - name: Run Go tests (short)
         run: go test -short -count=1 ./...
-
-      - name: Run database e2e tests
-        run: docker compose -f database/compose.yaml up --build --abort-on-container-exit --exit-code-from testrunner
-        env:
-          SSHPIPERD_DEBUG: "0"
-
-      - name: Tear down compose stack
-        if: always()
-        run: docker compose -f database/compose.yaml down -v

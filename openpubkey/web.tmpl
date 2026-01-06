@@ -104,7 +104,7 @@
             $('.ssh-host').on('keyup blur', function () {
                 let self = $(this);
 
-                if (self.val() == '' && !self.is(':focus')) {
+                if (self.val() === '' && !self.is(':focus')) {
                     if (!self.is($('.ssh-host').last())) {
                         self.parent().parent().parent().hide('slow', function () {
                             $(this).remove();

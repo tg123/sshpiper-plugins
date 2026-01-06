@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/tg123/sshpiper/libplugin"
+	"github.com/tg123/sshpiper/libplugin/skel"
 )
 
 type skelpipeWrapper struct {
@@ -37,7 +38,7 @@ type skelpipeToPrivateKeyWrapper struct {
 	skelpipeToWrapper
 }
 
-func (s *skelpipeWrapper) From() []libplugin.SkelPipeFrom {
+func (s *skelpipeWrapper) From() []skel.SkelPipeFrom {
 
 	w := skelpipeFromWrapper{
 		skelpipeWrapper: *s,
@@ -45,11 +46,11 @@ func (s *skelpipeWrapper) From() []libplugin.SkelPipeFrom {
 
 	switch s.pipe.FromType {
 	case authMapTypePassword:
-		return []libplugin.SkelPipeFrom{&skelpipeFromPasswordWrapper{
+		return []skel.SkelPipeFrom{&skelpipeFromPasswordWrapper{
 			skelpipeFromWrapper: w,
 		}}
 	case authMapTypePrivateKey:
-		return []libplugin.SkelPipeFrom{&skelpipeFromPublicKeyWrapper{
+		return []skel.SkelPipeFrom{&skelpipeFromPublicKeyWrapper{
 			skelpipeFromWrapper: w,
 		}}
 
@@ -74,7 +75,7 @@ func (s *skelpipeToWrapper) KnownHosts(conn libplugin.ConnMetadata) ([]byte, err
 	return []byte(s.pipe.KnownHosts.Data), nil
 }
 
-func (s *skelpipeFromWrapper) MatchConn(conn libplugin.ConnMetadata) (libplugin.SkelPipeTo, error) {
+func (s *skelpipeFromWrapper) MatchConn(conn libplugin.ConnMetadata) (skel.SkelPipeTo, error) {
 
 	switch s.pipe.ToType {
 	case authMapTypePassword:
@@ -125,14 +126,14 @@ func (s *skelpipeToPasswordWrapper) OverridePassword(conn libplugin.ConnMetadata
 	return []byte(s.pipe.ToPassword), nil
 }
 
-func (p *plugin) listPipe(conn libplugin.ConnMetadata) ([]libplugin.SkelPipe, error) {
+func (p *plugin) listPipe(conn libplugin.ConnMetadata) ([]skel.SkelPipe, error) {
 
 	pipe, err := p.loadPipeFromDB(conn)
 	if err != nil {
 		return nil, err
 	}
 
-	return []libplugin.SkelPipe{&skelpipeWrapper{
+	return []skel.SkelPipe{&skelpipeWrapper{
 		pipe: &pipe,
 	}}, nil
 }

@@ -68,8 +68,7 @@ func lookupDownstreamWithFallback(db *gorm.DB, user string) (*downstream, error)
 func lookupDownstream(db *gorm.DB, user string) (*downstream, error) {
 	d := downstream{}
 
-	if err := db.Set("gorm:auto_preload", true).
-		Preload("Upstream").
+	if err := db.Preload("Upstream").
 		Preload("Upstream.Server").
 		Preload("Upstream.Server.HostKey").
 		Preload("Upstream.PrivateKey").

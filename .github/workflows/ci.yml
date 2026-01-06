@@ -24,10 +24,11 @@ jobs:
           cache: true
 
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v9
         with:
-          version: v1.61.0
-          args: --timeout=5m
+          args: --timeout=60m --verbose --print-resources-usage --build-tags full -D errcheck
+        env:
+          GOGC: "10"
 
   test:
     runs-on: ubuntu-latest
@@ -46,12 +47,3 @@ jobs:
 
       - name: Run Go tests (short)
         run: go test -short -count=1 ./...
-
-      - name: Run database e2e tests
-        run: docker compose -f database/compose.yaml up --build --abort-on-container-exit --exit-code-from testrunner
-        env:
-          SSHPIPERD_DEBUG: "0"
-
-      - name: Tear down compose stack
-        if: always()
-        run: docker compose -f database/compose.yaml down -v

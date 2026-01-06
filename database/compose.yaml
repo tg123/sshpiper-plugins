@@ -14,7 +14,7 @@ services:
     build: 
       context: ..
       dockerfile_inline: |
-        FROM docker.io/golang:1.23-bookworm as builder
+        FROM docker.io/golang:1.25-bookworm as builder
 
         RUN mkdir -p /sshpiperd
 

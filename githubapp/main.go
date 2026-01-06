@@ -15,6 +15,7 @@ import (
 	"github.com/sethvargo/go-limiter/memorystore"
 	log "github.com/sirupsen/logrus"
 	"github.com/tg123/sshpiper/libplugin"
+	"github.com/tg123/sshpiper/libplugin/skel"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/oauth2"
 	githubendpoint "golang.org/x/oauth2/github"
@@ -261,7 +262,7 @@ func main() {
 						return err
 					}
 
-					return libplugin.VerifyHostKeyFromKnownHosts(bytes.NewBuffer(data), hostname, netaddr, key)
+					return skel.VerifyHostKeyFromKnownHosts(bytes.NewBuffer(data), hostname, netaddr, key)
 				},
 			}, nil
 		},

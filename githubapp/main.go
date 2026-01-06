@@ -5,6 +5,7 @@ import (
 	"context"
 	crand "crypto/rand"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"math/big"
 	"net"
@@ -116,7 +117,7 @@ func main() {
 							store.SetSshError(session, errMsgBadUpstreamCred) // set already notified
 						}
 
-						return nil, fmt.Errorf(errMsgBadUpstreamCred)
+						return nil, errors.New(errMsgBadUpstreamCred)
 					}
 
 					st := time.Now()

@@ -1,0 +1,32 @@
+name: e2e
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  plugin-e2e:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        plugin:
+          - database
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run ${{ matrix.plugin }} e2e tests
+        run: |
+          docker compose -f ${{ matrix.plugin }}/compose.yaml up --abort-on-container-exit --exit-code-from testrunner
+
+      - name: Cleanup ${{ matrix.plugin }} stack
+        if: always()
+        run: |
+          docker compose -f ${{ matrix.plugin }}/compose.yaml down -v

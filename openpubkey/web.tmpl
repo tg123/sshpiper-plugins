@@ -191,9 +191,6 @@
                 }
 
                 hostArr.forEach(function (host) {
-                    if (!host) {
-                        return;
-                    }
                     let row = sshRow.clone(true);
                     row.find('.ssh-host').val(host);
                     row.appendTo(rowContainer);

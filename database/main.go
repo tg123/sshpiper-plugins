@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"strings"
 
 	"github.com/tg123/sshpiper/libplugin"
 	"github.com/tg123/sshpiper/libplugin/skel"
@@ -221,6 +223,35 @@ func main() {
 				}
 
 				return origin(conn)
+			}
+
+			config.VerifyHostKeyCallback = func(conn libplugin.ConnMetadata, hostname, netaddr string, key []byte) error {
+				pipe, err := p.loadPipeFromDB(conn)
+				if err != nil {
+					return err
+				}
+
+				if pipe.IgnoreHostkey {
+					return nil
+				}
+
+				wrapper := skelpipeToWrapper{
+					skelpipeWrapper: skelpipeWrapper{
+						pipe: &pipe,
+					},
+					username: pipe.MappedUsername,
+				}
+
+				data, err := wrapper.KnownHosts(conn)
+				if err != nil {
+					return err
+				}
+
+				if len(strings.TrimSpace(string(data))) == 0 {
+					return nil
+				}
+
+				return skel.VerifyHostKeyFromKnownHosts(bytes.NewReader(data), hostname, netaddr, key)
 			}
 
 			return config, nil

@@ -77,7 +77,7 @@ func (s *sessionstoreMemory) GetSshError(session string) (err *string) {
 }
 
 func (s *sessionstoreMemory) DeleteSession(session string, keeperr bool) error {
-	s.store.Delete(session, "secret", "upstream", "nonce")
+	s.store.Delete(session, "secret", "upstream")
 	if !keeperr {
 		s.store.Delete(session, "ssherror")
 	}

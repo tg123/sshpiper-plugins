@@ -36,11 +36,7 @@ func (s *sessionstoreMemory) GetUpstream(session string) (*upstreamConfig, error
 		return nil, nil
 	}
 
-	if u, ok := upstream.(*upstreamConfig); ok {
-		return u, nil
-	}
-
-	return nil, nil
+	return upstream.(*upstreamConfig), nil
 }
 
 func (s *sessionstoreMemory) SetUpstream(session string, upstream *upstreamConfig) error {
@@ -60,11 +56,7 @@ func (s *sessionstoreMemory) GetSshError(session string) (err *string) {
 		return nil
 	}
 
-	if e, ok := v.(*string); ok {
-		return e
-	}
-
-	return nil
+	return v.(*string)
 }
 
 func (s *sessionstoreMemory) DeleteSession(session string, keeperr bool) error {

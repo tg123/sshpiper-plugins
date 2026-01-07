@@ -45,8 +45,7 @@ func (s *sessionstoreMemory) SetUpstream(session string, upstream *upstreamConfi
 }
 
 func (s *sessionstoreMemory) SetSshError(session string, err string) error {
-	e := err
-	s.store.SetValue(session, "ssherror", &e)
+	s.store.SetValue(session, "ssherror", &err)
 	return nil
 }
 

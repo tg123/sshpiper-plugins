@@ -16,7 +16,7 @@ type contextKey string
 
 const nonceKey contextKey = "nonce"
 
-type web struct {
+type opkWeb struct {
 	sessionstore sessionstore
 
 	provider rp.RelyingParty
@@ -31,7 +31,7 @@ type oidcconfig struct {
 	issuer       string
 }
 
-func newWeb(config oidcconfig, sessionstore sessionstore) (*web, error) {
+func newWeb(config oidcconfig, sessionstore sessionstore) (*opkWeb, error) {
 	r := gin.Default()
 	r.LoadHTMLFiles(templatefile)
 
@@ -49,7 +49,7 @@ func newWeb(config oidcconfig, sessionstore sessionstore) (*web, error) {
 		return nil, fmt.Errorf("error creating provider: %w", err)
 	}
 
-	w := &web{
+	w := &opkWeb{
 		r:            r,
 		sessionstore: sessionstore,
 		provider:     provider,
@@ -68,11 +68,11 @@ func newWeb(config oidcconfig, sessionstore sessionstore) (*web, error) {
 	return w, nil
 }
 
-func (w *web) Run(addr string) error {
+func (w *opkWeb) Run(addr string) error {
 	return w.r.Run(addr)
 }
 
-func (w *web) approve(c *gin.Context) {
+func (w *opkWeb) approve(c *gin.Context) {
 	session := c.PostForm("session")
 	if session == "" {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
@@ -114,7 +114,7 @@ func (w *web) approve(c *gin.Context) {
 	})
 }
 
-func (w *web) lasterr(c *gin.Context) {
+func (w *opkWeb) lasterr(c *gin.Context) {
 	session := c.Param("session")
 
 	errmsg := w.sessionstore.GetSshError(session)
@@ -144,7 +144,7 @@ func (w *web) lasterr(c *gin.Context) {
 	}
 }
 
-func (w *web) pipe(c *gin.Context) {
+func (w *opkWeb) pipe(c *gin.Context) {
 	session := c.Param("session")
 
 	if session == "" {
@@ -163,7 +163,7 @@ func (w *web) pipe(c *gin.Context) {
 	c.Redirect(http.StatusTemporaryRedirect, url)
 }
 
-func (w *web) loginCallback(c *gin.Context) {
+func (w *opkWeb) loginCallback(c *gin.Context) {
 	session := c.Query("state")
 	if session == "" {
 		c.AbortWithError(http.StatusBadRequest, fmt.Errorf("missing session"))

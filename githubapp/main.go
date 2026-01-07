@@ -14,8 +14,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sethvargo/go-limiter/memorystore"
-	"github.com/tg123/sshpiper-plugins/internal/openbrowser"
-	"github.com/tg123/sshpiper-plugins/internal/pluginutil"
+	webutil "github.com/tg123/sshpiper-plugins/internal/web"
 	"github.com/tg123/sshpiper/libplugin"
 	"github.com/tg123/sshpiper/libplugin/skel"
 	"github.com/urfave/cli/v2"
@@ -75,7 +74,7 @@ func main() {
 				return nil, err
 			}
 
-			pluginutil.RunWebServer(w, c.String("webaddr"), true)
+			webutil.RunWebServer(w, c.String("webaddr"), true)
 
 			limiter, err := memorystore.New(&memorystore.Config{
 				Tokens:      3,
@@ -103,7 +102,7 @@ func main() {
 
 					if lasterr == nil {
 						// new session
-						openbrowser.PromptPipe(client, baseurl, session)
+						webutil.PromptPipe(client, baseurl, session)
 						store.SetSshError(session, "") // set waiting for approval
 
 					} else if *lasterr != "" {

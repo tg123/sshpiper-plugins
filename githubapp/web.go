@@ -20,17 +20,17 @@ const templatefile = "web.tmpl"
 
 var sessionRegexp = regexp.MustCompile(`^[A-Za-z0-9-]+$`)
 
-type web struct {
+type appWeb struct {
 	sessionstore sessionstore
 	oauth        *oauth2.Config
 	r            *gin.Engine
 }
 
-func newWeb(oauth *oauth2.Config, sessionstore sessionstore) (*web, error) {
+func newWeb(oauth *oauth2.Config, sessionstore sessionstore) (*appWeb, error) {
 	r := gin.Default()
 	r.LoadHTMLFiles(templatefile)
 
-	w := &web{
+	w := &appWeb{
 		r:            r,
 		oauth:        oauth,
 		sessionstore: sessionstore,
@@ -47,11 +47,11 @@ func newWeb(oauth *oauth2.Config, sessionstore sessionstore) (*web, error) {
 	return w, nil
 }
 
-func (w *web) Run(addr string) error {
+func (w *appWeb) Run(addr string) error {
 	return w.r.Run(addr)
 }
 
-func (w *web) pipe(c *gin.Context) {
+func (w *appWeb) pipe(c *gin.Context) {
 	session := c.Param("session")
 
 	if session == "" || !sessionRegexp.MatchString(session) {
@@ -62,7 +62,7 @@ func (w *web) pipe(c *gin.Context) {
 	c.Redirect(http.StatusTemporaryRedirect, w.oauth.AuthCodeURL(session))
 }
 
-func (w *web) approve(c *gin.Context) {
+func (w *appWeb) approve(c *gin.Context) {
 	session := c.Param("session")
 	if session == "" || !sessionRegexp.MatchString(session) {
 		c.Redirect(http.StatusTemporaryRedirect, appurl)
@@ -110,7 +110,7 @@ func (w *web) approve(c *gin.Context) {
 	})
 }
 
-func (w *web) oauth2callback(c *gin.Context) {
+func (w *appWeb) oauth2callback(c *gin.Context) {
 	code := c.Query("code")
 	session := c.Query("state")
 

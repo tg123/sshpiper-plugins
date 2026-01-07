@@ -1,4 +1,4 @@
-package pluginutil
+package web
 
 import log "github.com/sirupsen/logrus"
 

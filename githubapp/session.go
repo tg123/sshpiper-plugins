@@ -1,6 +1,6 @@
 package main
 
-import "github.com/tg123/sshpiper-plugins/internal/pluginutil"
+import webutil "github.com/tg123/sshpiper-plugins/internal/web"
 
 type sessionstore interface {
 	GetSecret(session string) ([]byte, error)
@@ -15,10 +15,10 @@ type sessionstore interface {
 	DeleteSession(session string, keeperr bool) error
 }
 
-type sessionstoreMemory struct{ store *pluginutil.SessionStore }
+type sessionstoreMemory struct{ store *webutil.SessionStore }
 
 func newSessionstoreMemory() (*sessionstoreMemory, error) {
-	return &sessionstoreMemory{store: pluginutil.NewSessionStore()}, nil
+	return &sessionstoreMemory{store: webutil.NewSessionStore()}, nil
 }
 
 func (s *sessionstoreMemory) GetSecret(session string) ([]byte, error) {

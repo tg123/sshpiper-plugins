@@ -1,4 +1,4 @@
-package openbrowser
+package web
 
 import (
 	"fmt"

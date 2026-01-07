@@ -12,6 +12,7 @@ import (
 	"github.com/openpubkey/openpubkey/util"
 	"github.com/sethvargo/go-limiter/memorystore"
 	log "github.com/sirupsen/logrus"
+	"github.com/tg123/sshpiper-plugins/internal/openbrowser"
 	"github.com/tg123/sshpiper/libplugin"
 	"github.com/urfave/cli/v2"
 )
@@ -143,7 +144,7 @@ func main() {
 
 					store.SetNonce(session, nonce)
 
-					notifyClient(client, fmt.Sprintf("please open %v/pipe/%v with your browser to verify (timeout 1m)", baseurl, session))
+					openbrowser.PromptPipe(client, baseurl, session)
 
 					st := time.Now()
 

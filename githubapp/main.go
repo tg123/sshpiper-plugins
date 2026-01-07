@@ -15,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sethvargo/go-limiter/memorystore"
 	log "github.com/sirupsen/logrus"
+	"github.com/tg123/sshpiper-plugins/internal/openbrowser"
 	"github.com/tg123/sshpiper/libplugin"
 	"github.com/tg123/sshpiper/libplugin/skel"
 	"github.com/urfave/cli/v2"
@@ -106,7 +107,7 @@ func main() {
 
 					if lasterr == nil {
 						// new session
-						_, _ = client("", fmt.Sprintf("please open %v/pipe/%v with your browser to verify (timeout 1m)", baseurl, session), "", false)
+						openbrowser.PromptPipe(client, baseurl, session)
 						store.SetSshError(session, "") // set waiting for approval
 
 					} else if *lasterr != "" {

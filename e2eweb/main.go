@@ -6,7 +6,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"net"
 	"os"
 	"strings"
 	"time"
@@ -17,7 +16,11 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-const errMsgPipeApprove = "ok"
+const (
+	errMsgPipeApprove    = "ok"
+	approvalTimeout      = time.Minute
+	approvalPollInterval = 100 * time.Millisecond
+)
 
 type sessionstore interface {
 	GetSecret(session string) ([]byte, error)
@@ -157,7 +160,6 @@ func parseUpstream(data string) (info upstreamInfo, err error) {
 }
 
 func main() {
-
 	gin.DefaultWriter = os.Stderr
 
 	libplugin.CreateAndRunPluginTemplate(&libplugin.PluginTemplate{
@@ -209,13 +211,13 @@ func main() {
 
 					start := time.Now()
 					for {
-						if time.Since(start) > time.Minute {
+						if time.Since(start) > approvalTimeout {
 							return nil, fmt.Errorf("timeout waiting for approval")
 						}
 
 						up, _ := store.GetUpstream(session)
 						if up == "" {
-							time.Sleep(100 * time.Millisecond)
+							time.Sleep(approvalPollInterval)
 							continue
 						}
 

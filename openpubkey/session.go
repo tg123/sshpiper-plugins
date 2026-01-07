@@ -1,10 +1,6 @@
 package main
 
-import (
-	"time"
-
-	"github.com/patrickmn/go-cache"
-)
+import "github.com/tg123/sshpiper-plugins/internal/pluginutil"
 
 type sessionstore interface {
 	GetSecret(session string) ([]byte, error)
@@ -24,93 +20,66 @@ type sessionstore interface {
 
 var _ sessionstore = (*sessionstoreMemory)(nil)
 
-type sessionstoreMemory struct {
-	store *cache.Cache
-}
+type sessionstoreMemory struct{ store *pluginutil.SessionStore }
 
 func newSessionstoreMemory() (*sessionstoreMemory, error) {
-	return &sessionstoreMemory{
-		store: cache.New(1*time.Minute, 10*time.Minute),
-	}, nil
+	return &sessionstoreMemory{store: pluginutil.NewSessionStore()}, nil
 }
 
 func (s *sessionstoreMemory) GetNonce(session string) ([]byte, error) {
-	nonce, found := s.store.Get(session + "-nonce")
-	if !found {
-		return nil, nil
-	}
-
-	if b, ok := nonce.([]byte); ok {
-		return b, nil
-	}
-
-	return nil, nil
+	return s.store.GetBytes(session, "nonce"), nil
 }
 
 func (s *sessionstoreMemory) SetNonce(session string, nonce []byte) error {
-	s.store.Set(session+"-nonce", nonce, cache.DefaultExpiration)
+	s.store.SetBytes(session, "nonce", nonce)
 	return nil
 }
 
 func (s *sessionstoreMemory) GetSecret(session string) ([]byte, error) {
-	secret, found := s.store.Get(session + "-secret")
-	if !found {
-		return nil, nil
-	}
-
-	if b, ok := secret.([]byte); ok {
-		return b, nil
-	}
-
-	return nil, nil
+	return s.store.GetBytes(session, "secret"), nil
 }
 
 func (s *sessionstoreMemory) SetSecret(session string, secret []byte) error {
-	s.store.Set(session+"-secret", secret, cache.DefaultExpiration)
+	s.store.SetBytes(session, "secret", secret)
 	return nil
 }
 
 func (s *sessionstoreMemory) GetUpstream(session string) (string, error) {
-	upstream, found := s.store.Get(session + "-upstream")
-	if !found {
+	upstream, ok := s.store.GetString(session, "upstream")
+	if !ok {
 		return "", nil
 	}
-
-	if u, ok := upstream.(string); ok {
-		return u, nil
-	}
-
-	return "", nil
+	return upstream, nil
 }
 
 func (s *sessionstoreMemory) SetUpstream(session string, upstream string) error {
-	s.store.Set(session+"-upstream", upstream, cache.DefaultExpiration)
+	s.store.SetString(session, "upstream", upstream)
 	return nil
 }
 
 func (s *sessionstoreMemory) SetSshError(session string, err string) error {
-	s.store.Set(session+"-ssherror", &err, cache.DefaultExpiration)
+	e := err
+	s.store.SetValue(session, "ssherror", &e)
 	return nil
 }
 
 func (s *sessionstoreMemory) GetSshError(session string) (err *string) {
-	ssherror, found := s.store.Get(session + "-ssherror")
-	if !found {
+	v, ok := s.store.GetValue(session, "ssherror")
+	if !ok {
 		return nil
 	}
 
-	if v, ok := ssherror.(*string); ok {
-		return v
+	if e, ok := v.(*string); ok {
+		return e
 	}
 
 	return nil
 }
 
 func (s *sessionstoreMemory) DeleteSession(session string, keeperr bool) error {
-	s.store.Delete(session + "-secret")
-	s.store.Delete(session + "-upstream")
+	s.store.Delete(session, "secret", "upstream", "nonce")
 	if !keeperr {
-		s.store.Delete(session + "-ssherror")
+		s.store.Delete(session, "ssherror")
 	}
 	return nil
 }

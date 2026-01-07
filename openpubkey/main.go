@@ -13,6 +13,7 @@ import (
 	"github.com/sethvargo/go-limiter/memorystore"
 	log "github.com/sirupsen/logrus"
 	"github.com/tg123/sshpiper-plugins/internal/openbrowser"
+	"github.com/tg123/sshpiper-plugins/internal/pluginutil"
 	"github.com/tg123/sshpiper/libplugin"
 	"github.com/urfave/cli/v2"
 )
@@ -80,11 +81,7 @@ func main() {
 				return nil, err
 			}
 
-			go func() {
-				if err := w.Run(c.String("webaddr")); err != nil {
-					log.WithError(err).Error("openpubkey web server exited")
-				}
-			}()
+			pluginutil.RunWebServer(w, c.String("webaddr"), false)
 
 			limiter, err := memorystore.New(&memorystore.Config{
 				Tokens:      3,

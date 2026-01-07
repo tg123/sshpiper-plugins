@@ -1,10 +1,6 @@
 package main
 
-import (
-	"time"
-
-	"github.com/patrickmn/go-cache"
-)
+import "github.com/tg123/sshpiper-plugins/internal/pluginutil"
 
 type sessionstore interface {
 	GetSecret(session string) ([]byte, error)
@@ -19,63 +15,62 @@ type sessionstore interface {
 	DeleteSession(session string, keeperr bool) error
 }
 
-type sessionstoreMemory struct {
-	store *cache.Cache
-}
+type sessionstoreMemory struct{ store *pluginutil.SessionStore }
 
 func newSessionstoreMemory() (*sessionstoreMemory, error) {
-	return &sessionstoreMemory{
-		store: cache.New(1*time.Minute, 10*time.Minute),
-	}, nil
+	return &sessionstoreMemory{store: pluginutil.NewSessionStore()}, nil
 }
 
 func (s *sessionstoreMemory) GetSecret(session string) ([]byte, error) {
-	secret, found := s.store.Get(session + "-secret")
-	if !found {
-		return nil, nil
-	}
-
-	return secret.([]byte), nil
+	return s.store.GetBytes(session, "secret"), nil
 }
 
 func (s *sessionstoreMemory) SetSecret(session string, secret []byte) error {
-	s.store.Set(session+"-secret", secret, cache.DefaultExpiration)
+	s.store.SetBytes(session, "secret", secret)
 	return nil
 }
 
 func (s *sessionstoreMemory) GetUpstream(session string) (*upstreamConfig, error) {
-	upstream, found := s.store.Get(session + "-upstream")
-	if !found {
+	upstream, ok := s.store.GetValue(session, "upstream")
+	if !ok {
 		return nil, nil
 	}
 
-	return upstream.(*upstreamConfig), nil
+	if u, ok := upstream.(*upstreamConfig); ok {
+		return u, nil
+	}
+
+	return nil, nil
 }
 
 func (s *sessionstoreMemory) SetUpstream(session string, upstream *upstreamConfig) error {
-	s.store.Set(session+"-upstream", upstream, cache.DefaultExpiration)
+	s.store.SetValue(session, "upstream", upstream)
 	return nil
 }
 
 func (s *sessionstoreMemory) SetSshError(session string, err string) error {
-	s.store.Set(session+"-ssherror", &err, cache.DefaultExpiration)
+	e := err
+	s.store.SetValue(session, "ssherror", &e)
 	return nil
 }
 
 func (s *sessionstoreMemory) GetSshError(session string) (err *string) {
-	ssherror, found := s.store.Get(session + "-ssherror")
-	if !found {
+	v, ok := s.store.GetValue(session, "ssherror")
+	if !ok {
 		return nil
 	}
 
-	return ssherror.(*string)
+	if e, ok := v.(*string); ok {
+		return e
+	}
+
+	return nil
 }
 
 func (s *sessionstoreMemory) DeleteSession(session string, keeperr bool) error {
-	s.store.Delete(session + "-secret")
-	s.store.Delete(session + "-upstream")
+	s.store.Delete(session, "secret", "upstream")
 	if !keeperr {
-		s.store.Delete(session + "-ssherror")
+		s.store.Delete(session, "ssherror")
 	}
 	return nil
 }

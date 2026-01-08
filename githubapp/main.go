@@ -56,10 +56,7 @@ func main() {
 		},
 		CreateConfig: func(c *cli.Context) (*libplugin.SshPiperPluginConfig, error) {
 
-			store, err := newSessionstoreMemory()
-			if err != nil {
-				return nil, err
-			}
+			store := webutil.NewSessionStore()
 
 			baseurl := c.String("baseurl")
 
@@ -92,25 +89,25 @@ func main() {
 
 					defer func() {
 						if err != nil {
-							store.SetSshError(session, err.Error())
+							setSshError(store, session, err.Error())
 						} else {
-							store.SetSshError(session, errMsgPipeApprove) // this happens before pipestart, but it's ok because pipestart may timeout due to network issues
+							setSshError(store, session, errMsgPipeApprove) // this happens before pipestart, but it's ok because pipestart may timeout due to network issues
 						}
 					}()
 
-					lasterr := store.GetSshError(session)
+					lasterr := getSshError(store, session)
 
 					if lasterr == nil {
 						// new session
 						webutil.PromptPipe(client, baseurl, session)
-						store.SetSshError(session, "") // set waiting for approval
+						setSshError(store, session, "") // set waiting for approval
 
 					} else if *lasterr != "" {
 
 						// check if retry
 						if *lasterr != errMsgBadUpstreamCred {
 							_, _ = client("", fmt.Sprintf("your password/private key in sshpiper.yaml auth failed with upstream %v", *lasterr), "", false)
-							store.SetSshError(session, errMsgBadUpstreamCred) // set already notified
+							setSshError(store, session, errMsgBadUpstreamCred) // set already notified
 						}
 
 						return nil, errors.New(errMsgBadUpstreamCred)
@@ -124,13 +121,13 @@ func main() {
 							return nil, fmt.Errorf("timeout waiting for approval")
 						}
 
-						upstream, _ := store.GetUpstream(session)
+						upstream := getUpstream(store, session)
 						if upstream == nil {
 							time.Sleep(time.Millisecond * 100)
 							continue
 						}
 
-						key, _ := store.GetSecret(session)
+						key := getSecret(store, session)
 						if key == nil {
 							return nil, fmt.Errorf("secret expired")
 						}
@@ -226,17 +223,17 @@ func main() {
 				},
 				UpstreamAuthFailureCallback: func(conn libplugin.ConnMetadata, method string, err error, allowmethods []string) {
 					session := conn.UniqueID()
-					store.SetSshError(session, err.Error())
-					store.DeleteSession(session, true)
+					setSshError(store, session, err.Error())
+					deleteSession(store, session, true)
 				},
 				PipeStartCallback: func(conn libplugin.ConnMetadata) {
 					session := conn.UniqueID()
-					store.SetSshError(session, errMsgPipeApprove)
-					store.DeleteSession(session, true)
+					setSshError(store, session, errMsgPipeApprove)
+					deleteSession(store, session, true)
 				},
 				PipeErrorCallback: func(conn libplugin.ConnMetadata, err error) {
 					session := conn.UniqueID()
-					store.DeleteSession(session, false)
+					deleteSession(store, session, false)
 
 					ip, _, _ := net.SplitHostPort(conn.RemoteAddr())
 					limiter.Burst(context.Background(), ip, 1)
@@ -244,7 +241,7 @@ func main() {
 				VerifyHostKeyCallback: func(conn libplugin.ConnMetadata, hostname, netaddr string, key []byte) error {
 					session := conn.UniqueID()
 
-					upstream, _ := store.GetUpstream(session)
+					upstream := getUpstream(store, session)
 
 					if upstream == nil {
 						return fmt.Errorf("connection expired")

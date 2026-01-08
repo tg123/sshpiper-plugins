@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	webutil "github.com/tg123/sshpiper-plugins/internal/web"
 	"github.com/zitadel/oidc/v2/pkg/client/rp"
 	"github.com/zitadel/oidc/v2/pkg/oidc"
 )
@@ -17,7 +18,7 @@ type contextKey string
 const nonceKey contextKey = "nonce"
 
 type opkWeb struct {
-	sessionstore sessionstore
+	store *webutil.SessionStore
 
 	provider rp.RelyingParty
 
@@ -31,7 +32,7 @@ type oidcconfig struct {
 	issuer       string
 }
 
-func newWeb(config oidcconfig, sessionstore sessionstore) (*opkWeb, error) {
+func newWeb(config oidcconfig, store *webutil.SessionStore) (*opkWeb, error) {
 	r := gin.Default()
 	r.LoadHTMLFiles(templatefile)
 
@@ -50,9 +51,9 @@ func newWeb(config oidcconfig, sessionstore sessionstore) (*opkWeb, error) {
 	}
 
 	w := &opkWeb{
-		r:            r,
-		sessionstore: sessionstore,
-		provider:     provider,
+		r:        r,
+		store:    store,
+		provider: provider,
 	}
 
 	r.GET("/", func(c *gin.Context) {
@@ -82,7 +83,7 @@ func (w *opkWeb) approve(c *gin.Context) {
 		return
 	}
 
-	if secret, _ := w.sessionstore.GetSecret(session); secret == nil {
+	if secret := getSecret(w.store, session); secret == nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 			"status": "error",
 			"error":  "invalid or expired session",
@@ -107,7 +108,7 @@ func (w *opkWeb) approve(c *gin.Context) {
 		return
 	}
 
-	w.sessionstore.SetUpstream(session, upstream)
+	setUpstream(w.store, session, upstream)
 
 	c.JSON(http.StatusOK, gin.H{
 		"status": "ok",
@@ -117,7 +118,7 @@ func (w *opkWeb) approve(c *gin.Context) {
 func (w *opkWeb) lasterr(c *gin.Context) {
 	session := c.Param("session")
 
-	errmsg := w.sessionstore.GetSshError(session)
+	errmsg := getSshError(w.store, session)
 	if errmsg == nil {
 		c.JSON(http.StatusOK, gin.H{
 			"status": "unknown",
@@ -152,7 +153,7 @@ func (w *opkWeb) pipe(c *gin.Context) {
 		return
 	}
 
-	nonce, _ := w.sessionstore.GetNonce(session)
+	nonce := getNonce(w.store, session)
 	if nonce == nil {
 		c.AbortWithError(http.StatusBadRequest, fmt.Errorf("session expired"))
 		return
@@ -170,14 +171,14 @@ func (w *opkWeb) loginCallback(c *gin.Context) {
 		return
 	}
 
-	nonce, _ := w.sessionstore.GetNonce(session)
+	nonce := getNonce(w.store, session)
 	if nonce == nil {
 		c.AbortWithError(http.StatusBadRequest, fmt.Errorf("session expired"))
 		return
 	}
 
 	codeExchangeHandler := func(_ http.ResponseWriter, _ *http.Request, tokens *oidc.Tokens[*oidc.IDTokenClaims], _ string, _ rp.RelyingParty) {
-		w.sessionstore.SetSecret(session, []byte(tokens.IDToken))
+		setSecret(w.store, session, []byte(tokens.IDToken))
 		c.HTML(http.StatusOK, templatefile, gin.H{
 			"session": session,
 		})

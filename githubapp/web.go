@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/go-github/v50/github"
+	webutil "github.com/tg123/sshpiper-plugins/internal/web"
 	"golang.org/x/oauth2"
 	"gopkg.in/yaml.v3"
 )
@@ -21,19 +22,19 @@ const templatefile = "web.tmpl"
 var sessionRegexp = regexp.MustCompile(`^[A-Za-z0-9-]+$`)
 
 type appWeb struct {
-	sessionstore sessionstore
-	oauth        *oauth2.Config
-	r            *gin.Engine
+	store *webutil.SessionStore
+	oauth *oauth2.Config
+	r     *gin.Engine
 }
 
-func newWeb(oauth *oauth2.Config, sessionstore sessionstore) (*appWeb, error) {
+func newWeb(oauth *oauth2.Config, store *webutil.SessionStore) (*appWeb, error) {
 	r := gin.Default()
 	r.LoadHTMLFiles(templatefile)
 
 	w := &appWeb{
-		r:            r,
-		oauth:        oauth,
-		sessionstore: sessionstore,
+		r:     r,
+		oauth: oauth,
+		store: store,
 	}
 
 	r.GET("/", func(c *gin.Context) {
@@ -77,14 +78,15 @@ func (w *appWeb) approve(c *gin.Context) {
 		KnownHostsData: c.PostForm("knownhosts"),
 	}
 
-	w.sessionstore.SetUpstream(session, upstreamConfig)
+	setUpstream(w.store, session, upstreamConfig)
 
 	var errors []string
 	var infos []string
+	var errmsg *string
 
 	for {
 
-		errmsg := w.sessionstore.GetSshError(session)
+		errmsg = getSshError(w.store, session)
 		if errmsg == nil {
 			errors = append(errors, "session expired")
 			break
@@ -193,7 +195,7 @@ func (w *appWeb) oauth2callback(c *gin.Context) {
 	}
 
 	if len(upstreams) > 0 {
-		w.sessionstore.SetSecret(session, key)
+		setSecret(w.store, session, key)
 	}
 
 	if len(repos) == 0 {

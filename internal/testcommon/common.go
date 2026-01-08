@@ -137,20 +137,17 @@ func KillCmd(c *exec.Cmd) {
 }
 
 func RunAndGetStdout(cmd string, args ...string) ([]byte, error) {
-	// Use a non-pty execution path to avoid line wrapping that can corrupt
-	// key material (e.g. ssh-keyscan output).
-	var stdout bytes.Buffer
+	c, _, stdout, err := RunCmd(cmd, args...)
 
-	c := exec.Command(cmd, args...)
-	c.Stdout = &stdout
-	c.Stderr = &stdout
-	c.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGTERM}
-
-	if err := c.Run(); err != nil {
+	if err != nil {
 		return nil, err
 	}
 
-	return stdout.Bytes(), nil
+	if err := c.Wait(); err != nil {
+		return nil, err
+	}
+
+	return io.ReadAll(stdout)
 }
 
 func NextAvaliablePort() int {

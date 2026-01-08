@@ -1,106 +1,12 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
-	"crypto/subtle"
 	"fmt"
-	"log"
-	"net"
-	"strings"
 
 	"github.com/tg123/sshpiper/libplugin"
 	"github.com/tg123/sshpiper/libplugin/skel"
 	"github.com/urfave/cli/v2"
-	"golang.org/x/crypto/ssh"
-	"golang.org/x/crypto/ssh/knownhosts"
 )
-
-// verifyHostKey walks every entry in the supplied known_hosts data and accepts
-// the connection only if the presented key matches at least one entry for the
-// target host. This avoids stopping at the first host match, which matters for
-// hosts exposing multiple key types while the known_hosts contains more than
-// one algorithm.
-func verifyHostKey(knownHosts []byte, hostWithPort, remoteAddr string, presented []byte) error {
-	pub, err := ssh.ParsePublicKey(presented)
-	if err != nil {
-		return err
-	}
-
-	stripBrackets := func(h string) string {
-		if strings.HasPrefix(h, "[") && strings.Contains(h, "]") {
-			return strings.TrimSuffix(strings.TrimPrefix(h, "["), "]")
-		}
-		return h
-	}
-
-	matchesHost := func(hostPattern string) bool {
-		for _, h := range strings.Split(hostPattern, ",") {
-			h = strings.TrimSpace(h)
-			if h == "" {
-				continue
-			}
-
-			targets := []string{hostWithPort, remoteAddr, stripBrackets(hostWithPort), stripBrackets(remoteAddr)}
-			hStripped := stripBrackets(h)
-
-			for _, t := range targets {
-				if t == "" {
-					continue
-				}
-
-				if h == t || hStripped == stripBrackets(t) {
-					return true
-				}
-			}
-		}
-
-		return false
-	}
-
-	var wanted []knownhosts.KnownKey
-	scanner := bufio.NewScanner(bytes.NewReader(knownHosts))
-
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-
-		fields := strings.Fields(line)
-		if len(fields) < 3 {
-			continue
-		}
-
-		hostField := fields[0]
-		keyText := strings.Join(fields[1:], " ")
-
-		knownKey, _, _, _, err := ssh.ParseAuthorizedKey([]byte(keyText))
-		if err != nil {
-			continue
-		}
-
-		if !matchesHost(hostField) {
-			continue
-		}
-
-		if subtle.ConstantTimeCompare(knownKey.Marshal(), pub.Marshal()) == 1 {
-			return nil
-		}
-
-		wanted = append(wanted, knownhosts.KnownKey{Key: knownKey})
-	}
-
-	if err := scanner.Err(); err != nil {
-		return err
-	}
-
-	if len(wanted) > 0 {
-		return &knownhosts.KeyError{Want: wanted}
-	}
-
-	return &knownhosts.KeyError{}
-}
 
 func main() {
 
@@ -315,68 +221,6 @@ func main() {
 				}
 
 				return origin(conn)
-			}
-
-			config.VerifyHostKeyCallback = func(conn libplugin.ConnMetadata, hostname, netaddr string, key []byte) error {
-				pipe, err := p.loadPipeFromDB(conn)
-				if err != nil {
-					return err
-				}
-
-				if pipe.IgnoreHostkey {
-					return nil
-				}
-
-				wrapper := skelpipeToWrapper{
-					skelpipeWrapper: skelpipeWrapper{
-						pipe: &pipe,
-					},
-					username: pipe.MappedUsername,
-				}
-
-				data, err := wrapper.KnownHosts(conn)
-				if err != nil {
-					return err
-				}
-
-				if len(strings.TrimSpace(string(data))) == 0 {
-					return nil
-				}
-
-				host := pipe.UpstreamHost
-
-				hostWithPort := host
-				remoteAddr := host
-
-				if h, p, err := net.SplitHostPort(host); err == nil {
-					// known_hosts entries with a port are bracketed, e.g. [host]:port
-					hostWithPort = fmt.Sprintf("[%s]:%s", h, p)
-					remoteAddr = hostWithPort
-				}
-
-				if err := verifyHostKey(data, hostWithPort, remoteAddr, key); err != nil {
-					if parsed, perr := ssh.ParsePublicKey(key); perr == nil {
-						fingerprint := ssh.FingerprintSHA256(parsed)
-						if ke, ok := err.(*knownhosts.KeyError); ok && len(ke.Want) > 0 {
-							var wants []string
-							for _, w := range ke.Want {
-								if w.Key != nil {
-									wants = append(wants, ssh.FingerprintSHA256(w.Key))
-								}
-							}
-							log.Printf("verify host key failed for %s (%s): got %s, want %s", hostWithPort, remoteAddr, fingerprint, strings.Join(wants, ", "))
-							log.Printf("known hosts data for %s:\n%s", hostWithPort, string(data))
-						} else {
-							log.Printf("verify host key failed for %s (%s): %s (%v)", hostWithPort, remoteAddr, fingerprint, err)
-						}
-					} else {
-						log.Printf("verify host key failed for %s (%s): %v", hostWithPort, remoteAddr, err)
-					}
-
-					return err
-				}
-
-				return nil
 			}
 
 			return config, nil

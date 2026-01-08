@@ -2,74 +2,47 @@ include:
   - ../../test/dummy-sshd.yaml
 
 services:
-
-  e2eweb:
-    build:
-      context: ../..
-      dockerfile_inline: |
-        FROM docker.io/golang:1.25-bookworm
-        RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
-        WORKDIR /src
-        COPY go.mod go.sum ./
-        RUN go mod download
-        COPY . .
-        RUN go build -o /usr/local/bin/e2eweb ./internal/e2eweb && \
-            go install github.com/tg123/sshpiper/cmd/sshpiperd@v1.5.1
-        EXPOSE 2222 3000
-        CMD ["sshpiperd", "/usr/local/bin/e2eweb", "--baseurl", "http://e2eweb:3000", "--webaddr", ":3000", "-p", "2222"]
-    environment:
-      - SSHPIPERD_E2EWEB_BASEURL=http://e2eweb:3000
-    ports:
-      - "2222:2222"
-      - "3000:3000"
-    depends_on:
-      - host-password
-      - host-publickey
-    volumes:
-      - shared:/shared
-
   testrunner:
+    environment:
+      - SSHPIPERD_LOG_LEVEL=trace
+      - SSHPIPERD_SERVER_KEY_GENERATE_MODE=notexist
+      - SSHPIPERD_DEBUG=${SSHPIPERD_DEBUG}
+      - GOCACHE=/cache/build
+      - GOPATH=/cache/go  
     build:
       context: ../..
       dockerfile_inline: |
-        FROM docker.io/golang:1.25-bookworm
-        RUN apt-get update && apt-get install -y --no-install-recommends openssh-client curl netcat-openbsd && rm -rf /var/lib/apt/lists/*
-        RUN mkdir -p /src
-        WORKDIR /src
-    depends_on:
-      - e2eweb
+        FROM docker.io/golang:1.25-bookworm as builder
+
+        RUN mkdir -p /sshpiperd
+
+        COPY --from=farmer1992/sshpiperd:latest /sshpiperd /sshpiperd
+        RUN mkdir -p /sshpiperd/plugins
+        RUN git config --global --add safe.directory /src
     volumes:
       - ../..:/src
       - shared:/shared
+      - buildcache:/cache
+      - sshconfig_publickey:/sshconfig_publickey
+      - sshconfig_password:/sshconfig_password      
+    working_dir: /src/internal/e2eweb
+    depends_on:
+      - host-publickey
+      - host-password      
     command:
       - /bin/bash
       - -c
       - |
-        set -euo pipefail
-        # wait for e2eweb to be ready
-        until nc -z e2eweb 2222; do sleep 1; done
-        session_file=/tmp/ssh.out
-        ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 2222 test@e2eweb "echo ok" >"$session_file" 2>&1 &
-        ssh_pid=$!
-        for _ in $(seq 1 30); do
-          session=$(sed -n 's/.*\/pipe\/\([A-Za-z0-9-]*\).*/\1/p' "$session_file" | head -n1)
-          [ -n "$session" ] && break
-          sleep 1
-        done
-        if [ -z "$session" ]; then
-          echo "failed to extract session id from ssh output"
-          cat "$session_file"
-          exit 1
+        mkdir -p /sshconfig_publickey/.ssh /sshconfig_password/.ssh
+        mkdir -p /sshpiperd/plugins
+        go build -tags e2e -o /sshpiperd/plugins/e2eweb .
+        if [ "${SSHPIPERD_DEBUG}" == "1" ]; then
+          echo "enter debug on hold mode"
+          sleep inf
+        else
+          go test -v -tags e2e ./...
         fi
-        curl -sSf -X POST -H "X-SSHPIPER-SESSION: $session" -H "X-SSHPIPER-UPSTREAM: user:pass@host-password:2222" http://e2eweb:3000/approve
-        wait $ssh_pid || true
-        timeout 20s ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 2222 test@e2eweb "echo ok" >"$session_file" 2>&1
-        grep -q "ok" "$session_file"
 
 volumes:
-  shared:
-    driver_opts:
-      type: tmpfs
-      device: tmpfs
-  sshconfig_publickey:
-  sshconfig_password:
+  buildcache:
+    driver: local

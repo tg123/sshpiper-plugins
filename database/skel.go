@@ -1,11 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"crypto/subtle"
 	"fmt"
+	"strings"
 
 	"github.com/tg123/sshpiper/libplugin"
 	"github.com/tg123/sshpiper/libplugin/skel"
+	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/knownhosts"
 )
 
 type skelpipeWrapper struct {
@@ -72,7 +76,22 @@ func (s *skelpipeToWrapper) IgnoreHostKey(conn libplugin.ConnMetadata) bool {
 }
 
 func (s *skelpipeToWrapper) KnownHosts(conn libplugin.ConnMetadata) ([]byte, error) {
-	return []byte(s.pipe.KnownHosts.Data), nil
+	data := strings.TrimSpace(s.pipe.KnownHosts.Data)
+
+	if data == "" {
+		return nil, nil
+	}
+
+	// If the data parses as a single authorized key, convert it into a known_hosts line.
+	if pub, _, _, rest, err := ssh.ParseAuthorizedKey([]byte(data)); err == nil && len(bytes.TrimSpace(rest)) == 0 {
+		return []byte(knownhosts.Line([]string{s.pipe.UpstreamHost}, pub)), nil
+	}
+
+	if signer, err := ssh.ParsePrivateKey([]byte(data)); err == nil {
+		return []byte(knownhosts.Line([]string{s.pipe.UpstreamHost}, signer.PublicKey())), nil
+	}
+
+	return []byte(data), nil
 }
 
 func (s *skelpipeFromWrapper) MatchConn(conn libplugin.ConnMetadata) (skel.SkelPipeTo, error) {

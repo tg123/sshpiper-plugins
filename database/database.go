@@ -19,8 +19,8 @@ type pipeConfig struct {
 	ToPrivateKey          keydata
 	ToAuthorizedKeys      keydata
 	// NoPassthrough         bool
-	KnownHosts            keydata
-	IgnoreHostkey         bool
+	KnownHosts    keydata
+	IgnoreHostkey bool
 }
 
 func (p *plugin) loadPipeFromDB(conn libplugin.ConnMetadata) (pipeConfig, error) {
@@ -33,19 +33,19 @@ func (p *plugin) loadPipeFromDB(conn libplugin.ConnMetadata) (pipeConfig, error)
 	}
 
 	pipe := pipeConfig{
-		Username:              user,
-		UpstreamHost:          d.Upstream.Server.Address,
-		MappedUsername:        d.Upstream.Username,
-		FromType:              d.AuthMapType,
-		FromPassword:          d.Password,
-		FromAuthorizedKeys:    d.AuthorizedKeys,
+		Username:           user,
+		UpstreamHost:       d.Upstream.Server.Address,
+		MappedUsername:     d.Upstream.Username,
+		FromType:           d.AuthMapType,
+		FromPassword:       d.Password,
+		FromAuthorizedKeys: d.AuthorizedKeys,
 		// FromAllowAnyPublicKey: d.AllowAnyPublicKey,
-		ToType:                d.Upstream.AuthMapType,
-		ToPassword:            d.Upstream.Password,
-		ToPrivateKey:          d.Upstream.PrivateKey,
+		ToType:       d.Upstream.AuthMapType,
+		ToPassword:   d.Upstream.Password,
+		ToPrivateKey: d.Upstream.PrivateKey,
 		// NoPassthrough:         d.NoPassthrough,
-		KnownHosts:            d.Upstream.Server.HostKey,
-		IgnoreHostkey:         d.Upstream.Server.IgnoreHostKey,
+		KnownHosts:    d.Upstream.Server.HostKey,
+		IgnoreHostkey: d.Upstream.Server.IgnoreHostKey,
 	}
 
 	return pipe, nil
@@ -68,7 +68,12 @@ func lookupDownstreamWithFallback(db *gorm.DB, user string) (*downstream, error)
 func lookupDownstream(db *gorm.DB, user string) (*downstream, error) {
 	d := downstream{}
 
-	if err := db.Set("gorm:auto_preload", true).Where(&downstream{Username: user}).First(&d).Error; err != nil {
+	if err := db.Preload("Upstream").
+		Preload("Upstream.Server").
+		Preload("Upstream.Server.HostKey").
+		Preload("Upstream.PrivateKey").
+		Preload("AuthorizedKeys").
+		Where(&downstream{Username: user}).First(&d).Error; err != nil {
 
 		return nil, err
 	}

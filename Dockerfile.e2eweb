@@ -9,7 +9,7 @@ RUN go mod download
 
 COPY . .
 
-RUN go build -o /usr/local/bin/e2eweb ./e2eweb && \
+RUN go build -o /usr/local/bin/e2eweb ./internal/e2eweb && \
     go install github.com/tg123/sshpiper/cmd/sshpiperd@v1.5.1
 
 FROM alpine:3.19

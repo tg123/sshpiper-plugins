@@ -85,20 +85,15 @@ func (s *sessionstoreMemory) DeleteSession(session string, keeperr bool) error {
 	return nil
 }
 
-type approveRequest struct {
-	Session  string
-	Upstream string
+type approverWeb struct {
+	store sessionstore
+	r     *gin.Engine
 }
 
 const (
 	headerSession  = "X-SSHPIPER-SESSION"
 	headerUpstream = "X-SSHPIPER-UPSTREAM"
 )
-
-type approverWeb struct {
-	store sessionstore
-	r     *gin.Engine
-}
 
 func newApproverWeb(store sessionstore) *approverWeb {
 	r := gin.Default()

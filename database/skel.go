@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/subtle"
 	"fmt"
 	"strings"
@@ -81,7 +82,8 @@ func (s *skelpipeToWrapper) KnownHosts(conn libplugin.ConnMetadata) ([]byte, err
 		return nil, nil
 	}
 
-	if pub, _, _, _, err := ssh.ParseAuthorizedKey([]byte(data)); err == nil {
+	// If the data parses as a single authorized key, convert it into a known_hosts line.
+	if pub, _, _, rest, err := ssh.ParseAuthorizedKey([]byte(data)); err == nil && len(bytes.TrimSpace(rest)) == 0 {
 		return []byte(knownhosts.Line([]string{s.pipe.UpstreamHost}, pub)), nil
 	}
 

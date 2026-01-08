@@ -11,6 +11,10 @@ import (
 )
 
 func TestE2EWebPlugin(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping database e2e tests in short mode")
+	}
+
 	testcommon.WaitForEndpointReady("host-password:2222")
 	testcommon.WaitForEndpointReady("host-publickey:2222")
 

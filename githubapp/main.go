@@ -14,7 +14,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sethvargo/go-limiter/memorystore"
-	log "github.com/sirupsen/logrus"
+	webutil "github.com/tg123/sshpiper-plugins/internal/web"
 	"github.com/tg123/sshpiper/libplugin"
 	"github.com/tg123/sshpiper/libplugin/skel"
 	"github.com/urfave/cli/v2"
@@ -56,10 +56,7 @@ func main() {
 		},
 		CreateConfig: func(c *cli.Context) (*libplugin.SshPiperPluginConfig, error) {
 
-			store, err := newSessionstoreMemory()
-			if err != nil {
-				return nil, err
-			}
+			store := webutil.NewSessionStore()
 
 			baseurl := c.String("baseurl")
 
@@ -74,11 +71,7 @@ func main() {
 				return nil, err
 			}
 
-			go func() {
-				if err := w.Run(c.String("webaddr")); err != nil {
-					log.WithError(err).Fatal("githubapp web server exited")
-				}
-			}()
+			webutil.RunWebServer(w, c.String("webaddr"), true)
 
 			limiter, err := memorystore.New(&memorystore.Config{
 				Tokens:      3,
@@ -96,25 +89,25 @@ func main() {
 
 					defer func() {
 						if err != nil {
-							store.SetSshError(session, err.Error())
+							setSshError(store, session, err.Error())
 						} else {
-							store.SetSshError(session, errMsgPipeApprove) // this happens before pipestart, but it's ok because pipestart may timeout due to network issues
+							setSshError(store, session, errMsgPipeApprove) // this happens before pipestart, but it's ok because pipestart may timeout due to network issues
 						}
 					}()
 
-					lasterr := store.GetSshError(session)
+					lasterr := getSshError(store, session)
 
 					if lasterr == nil {
 						// new session
-						_, _ = client("", fmt.Sprintf("please open %v/pipe/%v with your browser to verify (timeout 1m)", baseurl, session), "", false)
-						store.SetSshError(session, "") // set waiting for approval
+						webutil.PromptPipe(client, baseurl, session)
+						setSshError(store, session, "") // set waiting for approval
 
 					} else if *lasterr != "" {
 
 						// check if retry
 						if *lasterr != errMsgBadUpstreamCred {
 							_, _ = client("", fmt.Sprintf("your password/private key in sshpiper.yaml auth failed with upstream %v", *lasterr), "", false)
-							store.SetSshError(session, errMsgBadUpstreamCred) // set already notified
+							setSshError(store, session, errMsgBadUpstreamCred) // set already notified
 						}
 
 						return nil, errors.New(errMsgBadUpstreamCred)
@@ -128,13 +121,13 @@ func main() {
 							return nil, fmt.Errorf("timeout waiting for approval")
 						}
 
-						upstream, _ := store.GetUpstream(session)
+						upstream := getUpstream(store, session)
 						if upstream == nil {
 							time.Sleep(time.Millisecond * 100)
 							continue
 						}
 
-						key, _ := store.GetSecret(session)
+						key := getSecret(store, session)
 						if key == nil {
 							return nil, fmt.Errorf("secret expired")
 						}
@@ -230,17 +223,17 @@ func main() {
 				},
 				UpstreamAuthFailureCallback: func(conn libplugin.ConnMetadata, method string, err error, allowmethods []string) {
 					session := conn.UniqueID()
-					store.SetSshError(session, err.Error())
-					store.DeleteSession(session, true)
+					setSshError(store, session, err.Error())
+					deleteSession(store, session, true)
 				},
 				PipeStartCallback: func(conn libplugin.ConnMetadata) {
 					session := conn.UniqueID()
-					store.SetSshError(session, errMsgPipeApprove)
-					store.DeleteSession(session, true)
+					setSshError(store, session, errMsgPipeApprove)
+					deleteSession(store, session, true)
 				},
 				PipeErrorCallback: func(conn libplugin.ConnMetadata, err error) {
 					session := conn.UniqueID()
-					store.DeleteSession(session, false)
+					deleteSession(store, session, false)
 
 					ip, _, _ := net.SplitHostPort(conn.RemoteAddr())
 					limiter.Burst(context.Background(), ip, 1)
@@ -248,7 +241,7 @@ func main() {
 				VerifyHostKeyCallback: func(conn libplugin.ConnMetadata, hostname, netaddr string, key []byte) error {
 					session := conn.UniqueID()
 
-					upstream, _ := store.GetUpstream(session)
+					upstream := getUpstream(store, session)
 
 					if upstream == nil {
 						return fmt.Errorf("connection expired")

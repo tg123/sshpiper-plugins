@@ -1,0 +1,48 @@
+include:
+  - ../../test/dummy-sshd.yaml
+
+services:
+  testrunner:
+    environment:
+      - SSHPIPERD_LOG_LEVEL=trace
+      - SSHPIPERD_SERVER_KEY_GENERATE_MODE=notexist
+      - SSHPIPERD_DEBUG=${SSHPIPERD_DEBUG}
+      - GOCACHE=/cache/build
+      - GOPATH=/cache/go  
+    build:
+      context: ../..
+      dockerfile_inline: |
+        FROM docker.io/golang:1.25-bookworm as builder
+
+        RUN mkdir -p /sshpiperd
+
+        COPY --from=farmer1992/sshpiperd:latest /sshpiperd /sshpiperd
+        RUN mkdir -p /sshpiperd/plugins
+        RUN git config --global --add safe.directory /src
+    volumes:
+      - ../..:/src
+      - shared:/shared
+      - buildcache:/cache
+      - sshconfig_publickey:/sshconfig_publickey
+      - sshconfig_password:/sshconfig_password      
+    working_dir: /src/internal/e2eweb
+    depends_on:
+      - host-publickey
+      - host-password      
+    command:
+      - /bin/bash
+      - -c
+      - |
+        mkdir -p /sshconfig_publickey/.ssh /sshconfig_password/.ssh
+        mkdir -p /sshpiperd/plugins
+        go build -tags e2e -o /sshpiperd/plugins/e2eweb .
+        if [ "${SSHPIPERD_DEBUG}" == "1" ]; then
+          echo "enter debug on hold mode"
+          sleep inf
+        else
+          go test -v -tags e2e ./...
+        fi
+
+volumes:
+  buildcache:
+    driver: local

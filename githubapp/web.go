@@ -10,9 +10,59 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/go-github/v50/github"
+	webutil "github.com/tg123/sshpiper-plugins/internal/web"
 	"golang.org/x/oauth2"
 	"gopkg.in/yaml.v3"
 )
+
+func setSshError(store *webutil.SessionStore, session, err string) {
+	store.SetValue(session, "ssherror", &err)
+}
+
+func getSshError(store *webutil.SessionStore, session string) *string {
+	v, ok := store.GetValue(session, "ssherror")
+	if !ok {
+		return nil
+	}
+
+	if e, ok := v.(*string); ok {
+		return e
+	}
+
+	return nil
+}
+
+func setSecret(store *webutil.SessionStore, session string, secret []byte) {
+	store.SetBytes(session, "secret", secret)
+}
+
+func getSecret(store *webutil.SessionStore, session string) []byte {
+	return store.GetBytes(session, "secret")
+}
+
+func setUpstream(store *webutil.SessionStore, session string, upstream *upstreamConfig) {
+	store.SetValue(session, "upstream", upstream)
+}
+
+func getUpstream(store *webutil.SessionStore, session string) *upstreamConfig {
+	v, ok := store.GetValue(session, "upstream")
+	if !ok {
+		return nil
+	}
+
+	if u, ok := v.(*upstreamConfig); ok {
+		return u
+	}
+
+	return nil
+}
+
+func deleteSession(store *webutil.SessionStore, session string, keeperr bool) {
+	store.Delete(session, "secret", "upstream")
+	if !keeperr {
+		store.Delete(session, "ssherror")
+	}
+}
 
 const appurl = "https://github.com/apps/sshpiper"
 
@@ -20,20 +70,20 @@ const templatefile = "web.tmpl"
 
 var sessionRegexp = regexp.MustCompile(`^[A-Za-z0-9-]+$`)
 
-type web struct {
-	sessionstore sessionstore
-	oauth        *oauth2.Config
-	r            *gin.Engine
+type appWeb struct {
+	store *webutil.SessionStore
+	oauth *oauth2.Config
+	r     *gin.Engine
 }
 
-func newWeb(oauth *oauth2.Config, sessionstore sessionstore) (*web, error) {
+func newWeb(oauth *oauth2.Config, store *webutil.SessionStore) (*appWeb, error) {
 	r := gin.Default()
 	r.LoadHTMLFiles(templatefile)
 
-	w := &web{
-		r:            r,
-		oauth:        oauth,
-		sessionstore: sessionstore,
+	w := &appWeb{
+		r:     r,
+		oauth: oauth,
+		store: store,
 	}
 
 	r.GET("/", func(c *gin.Context) {
@@ -47,11 +97,11 @@ func newWeb(oauth *oauth2.Config, sessionstore sessionstore) (*web, error) {
 	return w, nil
 }
 
-func (w *web) Run(addr string) error {
+func (w *appWeb) Run(addr string) error {
 	return w.r.Run(addr)
 }
 
-func (w *web) pipe(c *gin.Context) {
+func (w *appWeb) pipe(c *gin.Context) {
 	session := c.Param("session")
 
 	if session == "" || !sessionRegexp.MatchString(session) {
@@ -62,7 +112,7 @@ func (w *web) pipe(c *gin.Context) {
 	c.Redirect(http.StatusTemporaryRedirect, w.oauth.AuthCodeURL(session))
 }
 
-func (w *web) approve(c *gin.Context) {
+func (w *appWeb) approve(c *gin.Context) {
 	session := c.Param("session")
 	if session == "" || !sessionRegexp.MatchString(session) {
 		c.Redirect(http.StatusTemporaryRedirect, appurl)
@@ -77,14 +127,15 @@ func (w *web) approve(c *gin.Context) {
 		KnownHostsData: c.PostForm("knownhosts"),
 	}
 
-	w.sessionstore.SetUpstream(session, upstreamConfig)
+	setUpstream(w.store, session, upstreamConfig)
 
 	var errors []string
 	var infos []string
+	var errmsg *string
 
 	for {
 
-		errmsg := w.sessionstore.GetSshError(session)
+		errmsg = getSshError(w.store, session)
 		if errmsg == nil {
 			errors = append(errors, "session expired")
 			break
@@ -110,7 +161,7 @@ func (w *web) approve(c *gin.Context) {
 	})
 }
 
-func (w *web) oauth2callback(c *gin.Context) {
+func (w *appWeb) oauth2callback(c *gin.Context) {
 	code := c.Query("code")
 	session := c.Query("state")
 
@@ -193,7 +244,7 @@ func (w *web) oauth2callback(c *gin.Context) {
 	}
 
 	if len(upstreams) > 0 {
-		w.sessionstore.SetSecret(session, key)
+		setSecret(w.store, session, key)
 	}
 
 	if len(repos) == 0 {

@@ -6,9 +6,59 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	webutil "github.com/tg123/sshpiper-plugins/internal/web"
 	"github.com/zitadel/oidc/v2/pkg/client/rp"
 	"github.com/zitadel/oidc/v2/pkg/oidc"
 )
+
+func setNonce(store *webutil.SessionStore, session string, nonce []byte) {
+	store.SetBytes(session, "nonce", nonce)
+}
+
+func getNonce(store *webutil.SessionStore, session string) []byte {
+	return store.GetBytes(session, "nonce")
+}
+
+func setSecret(store *webutil.SessionStore, session string, secret []byte) {
+	store.SetBytes(session, "secret", secret)
+}
+
+func getSecret(store *webutil.SessionStore, session string) []byte {
+	return store.GetBytes(session, "secret")
+}
+
+func setUpstream(store *webutil.SessionStore, session, upstream string) {
+	store.SetString(session, "upstream", upstream)
+}
+
+func getUpstream(store *webutil.SessionStore, session string) string {
+	if v, ok := store.GetString(session, "upstream"); ok {
+		return v
+	}
+	return ""
+}
+
+func setSshError(store *webutil.SessionStore, session, err string) {
+	store.SetValue(session, "ssherror", &err)
+}
+
+func getSshError(store *webutil.SessionStore, session string) *string {
+	v, ok := store.GetValue(session, "ssherror")
+	if !ok {
+		return nil
+	}
+	if e, ok := v.(*string); ok {
+		return e
+	}
+	return nil
+}
+
+func deleteSession(store *webutil.SessionStore, session string, keeperr bool) {
+	store.Delete(session, "secret", "upstream", "nonce")
+	if !keeperr {
+		store.Delete(session, "ssherror")
+	}
+}
 
 const templatefile = "web.tmpl"
 
@@ -16,8 +66,8 @@ type contextKey string
 
 const nonceKey contextKey = "nonce"
 
-type web struct {
-	sessionstore sessionstore
+type opkWeb struct {
+	store *webutil.SessionStore
 
 	provider rp.RelyingParty
 
@@ -31,7 +81,7 @@ type oidcconfig struct {
 	issuer       string
 }
 
-func newWeb(config oidcconfig, sessionstore sessionstore) (*web, error) {
+func newWeb(config oidcconfig, store *webutil.SessionStore) (*opkWeb, error) {
 	r := gin.Default()
 	r.LoadHTMLFiles(templatefile)
 
@@ -49,10 +99,10 @@ func newWeb(config oidcconfig, sessionstore sessionstore) (*web, error) {
 		return nil, fmt.Errorf("error creating provider: %w", err)
 	}
 
-	w := &web{
-		r:            r,
-		sessionstore: sessionstore,
-		provider:     provider,
+	w := &opkWeb{
+		r:        r,
+		store:    store,
+		provider: provider,
 	}
 
 	r.GET("/", func(c *gin.Context) {
@@ -68,11 +118,11 @@ func newWeb(config oidcconfig, sessionstore sessionstore) (*web, error) {
 	return w, nil
 }
 
-func (w *web) Run(addr string) error {
+func (w *opkWeb) Run(addr string) error {
 	return w.r.Run(addr)
 }
 
-func (w *web) approve(c *gin.Context) {
+func (w *opkWeb) approve(c *gin.Context) {
 	session := c.PostForm("session")
 	if session == "" {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
@@ -82,7 +132,7 @@ func (w *web) approve(c *gin.Context) {
 		return
 	}
 
-	if secret, _ := w.sessionstore.GetSecret(session); secret == nil {
+	if secret := getSecret(w.store, session); secret == nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 			"status": "error",
 			"error":  "invalid or expired session",
@@ -107,17 +157,17 @@ func (w *web) approve(c *gin.Context) {
 		return
 	}
 
-	w.sessionstore.SetUpstream(session, upstream)
+	setUpstream(w.store, session, upstream)
 
 	c.JSON(http.StatusOK, gin.H{
 		"status": "ok",
 	})
 }
 
-func (w *web) lasterr(c *gin.Context) {
+func (w *opkWeb) lasterr(c *gin.Context) {
 	session := c.Param("session")
 
-	errmsg := w.sessionstore.GetSshError(session)
+	errmsg := getSshError(w.store, session)
 	if errmsg == nil {
 		c.JSON(http.StatusOK, gin.H{
 			"status": "unknown",
@@ -144,7 +194,7 @@ func (w *web) lasterr(c *gin.Context) {
 	}
 }
 
-func (w *web) pipe(c *gin.Context) {
+func (w *opkWeb) pipe(c *gin.Context) {
 	session := c.Param("session")
 
 	if session == "" {
@@ -152,7 +202,7 @@ func (w *web) pipe(c *gin.Context) {
 		return
 	}
 
-	nonce, _ := w.sessionstore.GetNonce(session)
+	nonce := getNonce(w.store, session)
 	if nonce == nil {
 		c.AbortWithError(http.StatusBadRequest, fmt.Errorf("session expired"))
 		return
@@ -163,21 +213,21 @@ func (w *web) pipe(c *gin.Context) {
 	c.Redirect(http.StatusTemporaryRedirect, url)
 }
 
-func (w *web) loginCallback(c *gin.Context) {
+func (w *opkWeb) loginCallback(c *gin.Context) {
 	session := c.Query("state")
 	if session == "" {
 		c.AbortWithError(http.StatusBadRequest, fmt.Errorf("missing session"))
 		return
 	}
 
-	nonce, _ := w.sessionstore.GetNonce(session)
+	nonce := getNonce(w.store, session)
 	if nonce == nil {
 		c.AbortWithError(http.StatusBadRequest, fmt.Errorf("session expired"))
 		return
 	}
 
 	codeExchangeHandler := func(_ http.ResponseWriter, _ *http.Request, tokens *oidc.Tokens[*oidc.IDTokenClaims], _ string, _ rp.RelyingParty) {
-		w.sessionstore.SetSecret(session, []byte(tokens.IDToken))
+		setSecret(w.store, session, []byte(tokens.IDToken))
 		c.HTML(http.StatusOK, templatefile, gin.H{
 			"session": session,
 		})

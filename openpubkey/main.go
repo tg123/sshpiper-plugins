@@ -12,6 +12,7 @@ import (
 	"github.com/openpubkey/openpubkey/util"
 	"github.com/sethvargo/go-limiter/memorystore"
 	log "github.com/sirupsen/logrus"
+	webutil "github.com/tg123/sshpiper-plugins/internal/web"
 	"github.com/tg123/sshpiper/libplugin"
 	"github.com/urfave/cli/v2"
 )
@@ -60,10 +61,7 @@ func main() {
 		},
 		CreateConfig: func(c *cli.Context) (*libplugin.SshPiperPluginConfig, error) {
 
-			store, err := newSessionstoreMemory()
-			if err != nil {
-				return nil, err
-			}
+			store := webutil.NewSessionStore()
 
 			baseurl := c.String("baseurl")
 			issuerurl := c.String("issuerurl")
@@ -79,11 +77,7 @@ func main() {
 				return nil, err
 			}
 
-			go func() {
-				if err := w.Run(c.String("webaddr")); err != nil {
-					log.WithError(err).Error("openpubkey web server exited")
-				}
-			}()
+			webutil.RunWebServer(w, c.String("webaddr"), false)
 
 			limiter, err := memorystore.New(&memorystore.Config{
 				Tokens:      3,
@@ -98,7 +92,7 @@ func main() {
 			return &libplugin.SshPiperPluginConfig{
 				KeyboardInteractiveCallback: func(conn libplugin.ConnMetadata, client libplugin.KeyboardInteractiveChallenge) (u *libplugin.Upstream, err error) {
 					session := conn.UniqueID()
-					lasterr := store.GetSshError(session)
+					lasterr := getSshError(store, session)
 
 					// retry
 					if lasterr != nil {
@@ -111,18 +105,18 @@ func main() {
 							}
 
 							notifyClient(client, fmt.Sprintf("connection failed %v", lastErrMsg))
-							store.SetSshError(session, errMsgBadUpstream) // set already notified
+							setSshError(store, session, errMsgBadUpstream) // set already notified
 						}
 
 						return nil, fmt.Errorf("retry not allowed")
 					}
 
 					// new session
-					store.SetSshError(session, "") // set waiting for approval
+					setSshError(store, session, "") // set waiting for approval
 
 					defer func() {
 						if err != nil {
-							store.SetSshError(session, err.Error())
+							setSshError(store, session, err.Error())
 						}
 					}()
 
@@ -141,9 +135,9 @@ func main() {
 						return nil, err
 					}
 
-					store.SetNonce(session, nonce)
+					setNonce(store, session, nonce)
 
-					notifyClient(client, fmt.Sprintf("please open %v/pipe/%v with your browser to verify (timeout 1m)", baseurl, session))
+					webutil.PromptPipe(client, baseurl, session)
 
 					st := time.Now()
 
@@ -153,18 +147,18 @@ func main() {
 							return nil, fmt.Errorf("timeout waiting for approval")
 						}
 
-						lasterr := store.GetSshError(session)
+						lasterr := getSshError(store, session)
 						if lasterr != nil && *lasterr != "" {
 							return nil, fmt.Errorf("%s", *lasterr)
 						}
 
-						upstream, _ := store.GetUpstream(session)
+						upstream := getUpstream(store, session)
 						if upstream == "" {
 							time.Sleep(time.Millisecond * 100)
 							continue
 						}
 
-						token, _ := store.GetSecret(session)
+						token := getSecret(store, session)
 						if token == nil {
 							return nil, fmt.Errorf("secret expired")
 						}
@@ -205,17 +199,17 @@ func main() {
 				},
 				UpstreamAuthFailureCallback: func(conn libplugin.ConnMetadata, method string, err error, allowmethods []string) {
 					session := conn.UniqueID()
-					store.SetSshError(session, err.Error())
-					store.DeleteSession(session, true)
+					setSshError(store, session, err.Error())
+					deleteSession(store, session, true)
 				},
 				PipeStartCallback: func(conn libplugin.ConnMetadata) {
 					session := conn.UniqueID()
-					store.SetSshError(session, errMsgPipeApprove)
-					store.DeleteSession(session, true)
+					setSshError(store, session, errMsgPipeApprove)
+					deleteSession(store, session, true)
 				},
 				PipeErrorCallback: func(conn libplugin.ConnMetadata, err error) {
 					session := conn.UniqueID()
-					store.DeleteSession(session, false)
+					deleteSession(store, session, false)
 
 					ip, _, _ := net.SplitHostPort(conn.RemoteAddr())
 					limiter.Burst(context.Background(), ip, 1)

@@ -6,7 +6,17 @@ services:
   e2eweb:
     build:
       context: ../..
-      dockerfile: Dockerfile.e2eweb
+      dockerfile_inline: |
+        FROM docker.io/golang:1.25-bookworm
+        RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
+        WORKDIR /src
+        COPY go.mod go.sum ./
+        RUN go mod download
+        COPY . .
+        RUN go build -o /usr/local/bin/e2eweb ./internal/e2eweb && \
+            go install github.com/tg123/sshpiper/cmd/sshpiperd@v1.5.1
+        EXPOSE 2222 3000
+        CMD ["sshpiperd", "/usr/local/bin/e2eweb", "--baseurl", "http://e2eweb:3000", "--webaddr", ":3000", "-p", "2222"]
     environment:
       - SSHPIPERD_E2EWEB_BASEURL=http://e2eweb:3000
     ports:

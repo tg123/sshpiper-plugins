@@ -1,3 +1,5 @@
+version: "3.8"
+
 services:
   host-password:
     image: lscr.io/linuxserver/openssh-server:latest
@@ -16,15 +18,28 @@ services:
       - USER_NAME=user
       - LOG_STDOUT=true
     volumes:
-      - shared:/shared      
+      - shared:/shared
       - sshconfig_publickey:/config
+
+  e2eweb:
+    build:
+      context: ..
+      dockerfile: Dockerfile.e2eweb
+    environment:
+      - SSHPIPERD_E2EWEB_BASEURL=http://e2eweb:3000
+    ports:
+      - "2222:2222"
+      - "3000:3000"
+    depends_on:
+      - host-password
+      - host-publickey
+    volumes:
+      - shared:/shared
 
 volumes:
   shared:
     driver_opts:
       type: tmpfs
       device: tmpfs
-
   sshconfig_publickey:
-
   sshconfig_password:

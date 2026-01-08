@@ -1,0 +1,24 @@
+FROM golang:1.22-alpine AS build
+
+WORKDIR /app
+
+RUN apk add --no-cache git
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+RUN go build -o /usr/local/bin/e2eweb ./e2eweb && \
+    go install github.com/tg123/sshpiper/cmd/sshpiperd@v1.5.1
+
+FROM alpine:3.19
+
+RUN apk add --no-cache ca-certificates
+
+COPY --from=build /usr/local/bin/e2eweb /usr/local/bin/e2eweb
+COPY --from=build /go/bin/sshpiperd /usr/local/bin/sshpiperd
+
+EXPOSE 2222 3000
+
+CMD ["sshpiperd", "/usr/local/bin/e2eweb", "--baseurl", "http://e2eweb:3000", "--webaddr", ":3000", "-p", "2222"]

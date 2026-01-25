@@ -74,7 +74,11 @@ func (s *sessionstoreMemory) GetSshError(session string) (err *string) {
 		return nil
 	}
 
-	return v.(*string)
+	if e, ok := v.(*string); ok {
+		return e
+	}
+
+	return nil
 }
 
 func (s *sessionstoreMemory) DeleteSession(session string, keeperr bool) error {
@@ -115,19 +119,19 @@ func (w *approverWeb) approve(c *gin.Context) {
 	upstream := c.GetHeader(headerUpstream)
 
 	if session == "" || upstream == "" {
-		c.JSON(400, gin.H{"status": "error", "error": "missing session or upstream"})
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "missing session or upstream"})
 		return
 	}
 
 	if secret, _ := w.store.GetSecret(session); secret == nil {
-		c.JSON(400, gin.H{"status": "error", "error": "invalid or expired session"})
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "invalid or expired session"})
 		return
 	}
 
 	w.store.SetUpstream(session, upstream)
 	w.store.SetSshError(session, errMsgPipeApprove)
 
-	c.JSON(200, gin.H{"status": "ok"})
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
 type upstreamInfo struct {

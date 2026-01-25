@@ -19,6 +19,7 @@ jobs:
       matrix:
         plugin:
           - database
+          - internal/e2eweb
     steps:
       - uses: actions/checkout@v4
 

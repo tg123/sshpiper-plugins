@@ -19,6 +19,7 @@ require (
 	github.com/microsoftgraph/msgraph-sdk-go v1.51.0
 	github.com/openpubkey/openpubkey v0.2.2-0.20240119034148-208668c042c1
 	github.com/patrickmn/go-cache v2.1.0+incompatible
+	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
 	github.com/sethvargo/go-limiter v0.7.2
 	github.com/sirupsen/logrus v1.9.3
 	github.com/tg123/sshpiper v1.5.1
@@ -80,7 +81,6 @@ require (
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/muhlemmer/gu v0.3.1 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.8 // indirect
-	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/segmentio/asm v1.2.0 // indirect

@@ -1,6 +1,6 @@
 module github.com/tg123/sshpiper-plugins
 
-go 1.25
+go 1.26
 
 replace golang.org/x/crypto => github.com/tg123/sshpiper.crypto v0.45.0-sshpiper-20251119
 

@@ -19,45 +19,19 @@ func getNonce(store *webutil.SessionStore, session string) []byte {
 	return store.GetBytes(session, "nonce")
 }
 
-func setSecret(store *webutil.SessionStore, session string, secret []byte) {
-	store.SetBytes(session, "secret", secret)
-}
-
-func getSecret(store *webutil.SessionStore, session string) []byte {
-	return store.GetBytes(session, "secret")
-}
-
 func setUpstream(store *webutil.SessionStore, session, upstream string) {
-	store.SetString(session, "upstream", upstream)
+	store.SetString(session, webutil.KeyUpstream, upstream)
 }
 
 func getUpstream(store *webutil.SessionStore, session string) string {
-	if v, ok := store.GetString(session, "upstream"); ok {
+	if v, ok := store.GetString(session, webutil.KeyUpstream); ok {
 		return v
 	}
 	return ""
 }
 
-func setSshError(store *webutil.SessionStore, session, err string) {
-	store.SetValue(session, "ssherror", &err)
-}
-
-func getSshError(store *webutil.SessionStore, session string) *string {
-	v, ok := store.GetValue(session, "ssherror")
-	if !ok {
-		return nil
-	}
-	if e, ok := v.(*string); ok {
-		return e
-	}
-	return nil
-}
-
 func deleteSession(store *webutil.SessionStore, session string, keeperr bool) {
-	store.Delete(session, "secret", "upstream", "nonce")
-	if !keeperr {
-		store.Delete(session, "ssherror")
-	}
+	store.Reset(session, keeperr, "nonce")
 }
 
 const templatefile = "web.tmpl"
@@ -132,7 +106,7 @@ func (w *opkWeb) approve(c *gin.Context) {
 		return
 	}
 
-	if secret := getSecret(w.store, session); secret == nil {
+	if secret := w.store.GetSecret(session); secret == nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 			"status": "error",
 			"error":  "invalid or expired session",
@@ -167,7 +141,7 @@ func (w *opkWeb) approve(c *gin.Context) {
 func (w *opkWeb) lasterr(c *gin.Context) {
 	session := c.Param("session")
 
-	errmsg := getSshError(w.store, session)
+	errmsg := w.store.GetSshError(session)
 	if errmsg == nil {
 		c.JSON(http.StatusOK, gin.H{
 			"status": "unknown",
@@ -227,7 +201,7 @@ func (w *opkWeb) loginCallback(c *gin.Context) {
 	}
 
 	codeExchangeHandler := func(_ http.ResponseWriter, _ *http.Request, tokens *oidc.Tokens[*oidc.IDTokenClaims], _ string, _ rp.RelyingParty) {
-		setSecret(w.store, session, []byte(tokens.IDToken))
+		w.store.SetSecret(session, []byte(tokens.IDToken))
 		c.HTML(http.StatusOK, templatefile, gin.H{
 			"session": session,
 		})

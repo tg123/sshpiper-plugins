@@ -74,3 +74,52 @@ func (s *SessionStore) Delete(session string, suffixes ...string) {
 		s.store.Delete(key(session, suffix))
 	}
 }
+
+// Common session keys shared by plugins.
+const (
+	KeySecret   = "secret"
+	KeyUpstream = "upstream"
+	KeySshError = "ssherror"
+)
+
+// SetSecret stores a per-session secret payload.
+func (s *SessionStore) SetSecret(session string, secret []byte) {
+	s.SetBytes(session, KeySecret, secret)
+}
+
+// GetSecret retrieves a previously stored per-session secret payload.
+func (s *SessionStore) GetSecret(session string) []byte {
+	return s.GetBytes(session, KeySecret)
+}
+
+// SetSshError stores the latest ssh-side error message for a session.
+// A pointer is stored so callers can distinguish "unset" (nil) from
+// "explicitly empty" (non-nil pointer to "").
+func (s *SessionStore) SetSshError(session, err string) {
+	s.SetValue(session, KeySshError, &err)
+}
+
+// GetSshError returns the latest ssh-side error message for a session,
+// or nil if none was set.
+func (s *SessionStore) GetSshError(session string) *string {
+	v, ok := s.GetValue(session, KeySshError)
+	if !ok {
+		return nil
+	}
+
+	if e, ok := v.(*string); ok {
+		return e
+	}
+
+	return nil
+}
+
+// Reset clears the secret, upstream and any extra session keys provided.
+// When keeperr is false the ssh error key is also cleared.
+func (s *SessionStore) Reset(session string, keeperr bool, extraKeys ...string) {
+	keys := append([]string{KeySecret, KeyUpstream}, extraKeys...)
+	s.Delete(session, keys...)
+	if !keeperr {
+		s.Delete(session, KeySshError)
+	}
+}

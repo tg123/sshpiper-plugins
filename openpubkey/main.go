@@ -92,7 +92,7 @@ func main() {
 			return &libplugin.SshPiperPluginConfig{
 				KeyboardInteractiveCallback: func(conn libplugin.ConnMetadata, client libplugin.KeyboardInteractiveChallenge) (u *libplugin.Upstream, err error) {
 					session := conn.UniqueID()
-					lasterr := getSshError(store, session)
+					lasterr := store.GetSshError(session)
 
 					// retry
 					if lasterr != nil {
@@ -105,18 +105,18 @@ func main() {
 							}
 
 							notifyClient(client, fmt.Sprintf("connection failed %v", lastErrMsg))
-							setSshError(store, session, errMsgBadUpstream) // set already notified
+							store.SetSshError(session, errMsgBadUpstream) // set already notified
 						}
 
 						return nil, fmt.Errorf("retry not allowed")
 					}
 
 					// new session
-					setSshError(store, session, "") // set waiting for approval
+					store.SetSshError(session, "") // set waiting for approval
 
 					defer func() {
 						if err != nil {
-							setSshError(store, session, err.Error())
+							store.SetSshError(session, err.Error())
 						}
 					}()
 
@@ -147,7 +147,7 @@ func main() {
 							return nil, fmt.Errorf("timeout waiting for approval")
 						}
 
-						lasterr := getSshError(store, session)
+						lasterr := store.GetSshError(session)
 						if lasterr != nil && *lasterr != "" {
 							return nil, fmt.Errorf("%s", *lasterr)
 						}
@@ -158,7 +158,7 @@ func main() {
 							continue
 						}
 
-						token := getSecret(store, session)
+						token := store.GetSecret(session)
 						if token == nil {
 							return nil, fmt.Errorf("secret expired")
 						}
@@ -199,12 +199,12 @@ func main() {
 				},
 				UpstreamAuthFailureCallback: func(conn libplugin.ConnMetadata, method string, err error, allowmethods []string) {
 					session := conn.UniqueID()
-					setSshError(store, session, err.Error())
+					store.SetSshError(session, err.Error())
 					deleteSession(store, session, true)
 				},
 				PipeStartCallback: func(conn libplugin.ConnMetadata) {
 					session := conn.UniqueID()
-					setSshError(store, session, errMsgPipeApprove)
+					store.SetSshError(session, errMsgPipeApprove)
 					deleteSession(store, session, true)
 				},
 				PipeErrorCallback: func(conn libplugin.ConnMetadata, err error) {

@@ -20,75 +20,23 @@ const (
 	approvalPollInterval = 100 * time.Millisecond
 )
 
-type sessionstore interface {
-	GetSecret(session string) ([]byte, error)
-	SetSecret(session string, secret []byte) error
-
-	GetUpstream(session string) (upstream string, err error)
-	SetUpstream(session string, upstream string) error
-
-	SetSshError(session string, err string) error
-	GetSshError(session string) (err *string)
-
-	DeleteSession(session string, keeperr bool) error
+func setUpstream(store *web.SessionStore, session, upstream string) {
+	store.SetString(session, web.KeyUpstream, upstream)
 }
 
-type sessionstoreMemory struct{ store *web.SessionStore }
-
-func newSessionstoreMemory() (*sessionstoreMemory, error) {
-	return &sessionstoreMemory{store: web.NewSessionStore()}, nil
-}
-
-func (s *sessionstoreMemory) GetSecret(session string) ([]byte, error) {
-	return s.store.GetBytes(session, "secret"), nil
-}
-
-func (s *sessionstoreMemory) SetSecret(session string, secret []byte) error {
-	s.store.SetBytes(session, "secret", secret)
-	return nil
-}
-
-func (s *sessionstoreMemory) GetUpstream(session string) (string, error) {
-	u, ok := s.store.GetString(session, "upstream")
-	if !ok {
-		return "", nil
+func getUpstream(store *web.SessionStore, session string) string {
+	if v, ok := store.GetString(session, web.KeyUpstream); ok {
+		return v
 	}
-	return u, nil
+	return ""
 }
 
-func (s *sessionstoreMemory) SetUpstream(session string, upstream string) error {
-	s.store.SetString(session, "upstream", upstream)
-	return nil
-}
-
-func (s *sessionstoreMemory) SetSshError(session string, err string) error {
-	s.store.SetValue(session, "ssherror", &err)
-	return nil
-}
-
-func (s *sessionstoreMemory) GetSshError(session string) (err *string) {
-	v, ok := s.store.GetValue(session, "ssherror")
-	if !ok {
-		return nil
-	}
-
-	if e, ok := v.(*string); ok {
-		return e
-	}
-
-	return nil
-}
-
-func (s *sessionstoreMemory) DeleteSession(session string, keeperr bool) error {
-	s.store.Delete(session, "secret", "upstream")
-	if !keeperr {
-		s.store.Delete(session, "ssherror")
-	}
-	return nil
+func deleteSession(store *web.SessionStore, session string, keeperr bool) {
+	store.Reset(session, keeperr)
 }
 
 type approverWeb struct {
-	store sessionstore
+	store *web.SessionStore
 	r     *gin.Engine
 }
 
@@ -97,7 +45,7 @@ const (
 	headerUpstream = "X-SSHPIPER-UPSTREAM"
 )
 
-func newApproverWeb(store sessionstore) *approverWeb {
+func newApproverWeb(store *web.SessionStore) *approverWeb {
 	r := gin.Default()
 	w := &approverWeb{
 		store: store,
@@ -121,12 +69,17 @@ func (w *approverWeb) approve(c *gin.Context) {
 		return
 	}
 
-	if secret, _ := w.store.GetSecret(session); secret == nil {
+	if secret := w.store.GetSecret(session); secret == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "invalid or expired session"})
 		return
 	}
 
-	w.store.SetUpstream(session, upstream)
+	if _, err := parseUpstream(upstream); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "invalid upstream"})
+		return
+	}
+
+	setUpstream(w.store, session, upstream)
 	w.store.SetSshError(session, errMsgPipeApprove)
 
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
@@ -176,10 +129,7 @@ func main() {
 		},
 		CreateConfig: func(c *cli.Context) (*libplugin.SshPiperPluginConfig, error) {
 
-			store, err := newSessionstoreMemory()
-			if err != nil {
-				return nil, err
-			}
+			store := web.NewSessionStore()
 
 			baseurl := c.String("baseurl")
 
@@ -212,7 +162,7 @@ func main() {
 							return nil, fmt.Errorf("timeout waiting for approval")
 						}
 
-						up, _ := store.GetUpstream(session)
+						up := getUpstream(store, session)
 						if up == "" {
 							time.Sleep(approvalPollInterval)
 							continue
@@ -248,11 +198,11 @@ func main() {
 				PipeStartCallback: func(conn libplugin.ConnMetadata) {
 					session := conn.UniqueID()
 					store.SetSshError(session, errMsgPipeApprove)
-					store.DeleteSession(session, true)
+					deleteSession(store, session, true)
 				},
 				PipeErrorCallback: func(conn libplugin.ConnMetadata, err error) {
 					session := conn.UniqueID()
-					store.DeleteSession(session, false)
+					deleteSession(store, session, false)
 				},
 			}, nil
 		},

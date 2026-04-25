@@ -8,7 +8,7 @@ services:
       - SSHPIPERD_SERVER_KEY_GENERATE_MODE=notexist
       - SSHPIPERD_DEBUG=${SSHPIPERD_DEBUG}
       - GOCACHE=/cache/build
-      - GOPATH=/cache/go  
+      - GOPATH=/cache/go
     build:
       context: ../..
       dockerfile_inline: |

@@ -15,37 +15,12 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func setSshError(store *webutil.SessionStore, session, err string) {
-	store.SetValue(session, "ssherror", &err)
-}
-
-func getSshError(store *webutil.SessionStore, session string) *string {
-	v, ok := store.GetValue(session, "ssherror")
-	if !ok {
-		return nil
-	}
-
-	if e, ok := v.(*string); ok {
-		return e
-	}
-
-	return nil
-}
-
-func setSecret(store *webutil.SessionStore, session string, secret []byte) {
-	store.SetBytes(session, "secret", secret)
-}
-
-func getSecret(store *webutil.SessionStore, session string) []byte {
-	return store.GetBytes(session, "secret")
-}
-
 func setUpstream(store *webutil.SessionStore, session string, upstream *upstreamConfig) {
-	store.SetValue(session, "upstream", upstream)
+	store.SetValue(session, webutil.KeyUpstream, upstream)
 }
 
 func getUpstream(store *webutil.SessionStore, session string) *upstreamConfig {
-	v, ok := store.GetValue(session, "upstream")
+	v, ok := store.GetValue(session, webutil.KeyUpstream)
 	if !ok {
 		return nil
 	}
@@ -58,10 +33,7 @@ func getUpstream(store *webutil.SessionStore, session string) *upstreamConfig {
 }
 
 func deleteSession(store *webutil.SessionStore, session string, keeperr bool) {
-	store.Delete(session, "secret", "upstream")
-	if !keeperr {
-		store.Delete(session, "ssherror")
-	}
+	store.Reset(session, keeperr)
 }
 
 const appurl = "https://github.com/apps/sshpiper"
@@ -135,7 +107,7 @@ func (w *appWeb) approve(c *gin.Context) {
 
 	for {
 
-		errmsg = getSshError(w.store, session)
+		errmsg = w.store.GetSshError(session)
 		if errmsg == nil {
 			errors = append(errors, "session expired")
 			break
@@ -244,7 +216,7 @@ func (w *appWeb) oauth2callback(c *gin.Context) {
 	}
 
 	if len(upstreams) > 0 {
-		setSecret(w.store, session, key)
+		w.store.SetSecret(session, key)
 	}
 
 	if len(repos) == 0 {

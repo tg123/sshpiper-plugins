@@ -21,7 +21,7 @@ func NewWebApp() *WebApp {
 
 // LoadTemplate loads the conventional TemplateFile into the underlying engine.
 func (w *WebApp) LoadTemplate() {
-	w.Engine.LoadHTMLFiles(TemplateFile)
+	w.LoadHTMLFiles(TemplateFile)
 }
 
 // Run starts the underlying gin engine listening on addr, satisfying WebRunner.

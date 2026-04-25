@@ -23,6 +23,18 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Check go fmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "The following files are not gofmt-compliant:"
+            echo "$unformatted"
+            echo
+            echo "Run 'gofmt -s -w .' to fix."
+            gofmt -d $unformatted
+            exit 1
+          fi
+
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:

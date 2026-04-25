@@ -50,10 +50,10 @@ type upstream struct {
 type downstream struct {
 	gorm.Model
 
-	Name              string `gorm:"type:varchar(45)"`
-	Username          string `gorm:"type:varchar(45);unique_index"`
-	Password          string `gorm:"type:varchar(60)"`
-	AuthMapType       authMapType
+	Name        string `gorm:"type:varchar(45)"`
+	Username    string `gorm:"type:varchar(45);unique_index"`
+	Password    string `gorm:"type:varchar(60)"`
+	AuthMapType authMapType
 	// AllowAnyPublicKey bool
 	// NoPassthrough     bool
 

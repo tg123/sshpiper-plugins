@@ -18,6 +18,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/go-github/v50/github"
 	"github.com/sethvargo/go-limiter/memorystore"
+	log "github.com/sirupsen/logrus"
 	webutil "github.com/tg123/sshpiper-plugins/internal/web"
 	"github.com/tg123/sshpiper/libplugin"
 	"github.com/tg123/sshpiper/libplugin/skel"
@@ -31,7 +32,6 @@ const errMsgPipeApprove = "ok"
 const errMsgBadUpstreamCred = "bad upstream credential"
 
 func main() {
-
 	gin.DefaultWriter = os.Stderr
 
 	libplugin.CreateAndRunPluginTemplate(&libplugin.PluginTemplate{
@@ -61,7 +61,7 @@ func main() {
 		},
 		CreateConfig: func(c *cli.Context) (*libplugin.SshPiperPluginConfig, error) {
 
-			store := webutil.NewSessionStore()
+			store := webutil.NewSessionStore[*upstreamConfig]()
 
 			baseurl := c.String("baseurl")
 
@@ -76,7 +76,12 @@ func main() {
 				return nil, err
 			}
 
-			webutil.RunWebServer(w, c.String("webaddr"), true)
+			webaddr := c.String("webaddr")
+			go func() {
+				if err := w.Run(webaddr); err != nil {
+					log.WithError(err).Fatal("web server exited")
+				}
+			}()
 
 			limiter, err := memorystore.New(&memorystore.Config{
 				Tokens:      3,
@@ -126,7 +131,7 @@ func main() {
 							return nil, fmt.Errorf("timeout waiting for approval")
 						}
 
-						upstream := getUpstream(store, session)
+						upstream := store.GetUpstream(session)
 						if upstream == nil {
 							time.Sleep(time.Millisecond * 100)
 							continue
@@ -246,7 +251,7 @@ func main() {
 				VerifyHostKeyCallback: func(conn libplugin.ConnMetadata, hostname, netaddr string, key []byte) error {
 					session := conn.UniqueID()
 
-					upstream := getUpstream(store, session)
+					upstream := store.GetUpstream(session)
 
 					if upstream == nil {
 						return fmt.Errorf("connection expired")
@@ -268,24 +273,7 @@ func main() {
 	})
 }
 
-func setUpstream(store *webutil.SessionStore, session string, upstream *upstreamConfig) {
-	store.SetValue(session, webutil.KeyUpstream, upstream)
-}
-
-func getUpstream(store *webutil.SessionStore, session string) *upstreamConfig {
-	v, ok := store.GetValue(session, webutil.KeyUpstream)
-	if !ok {
-		return nil
-	}
-
-	if u, ok := v.(*upstreamConfig); ok {
-		return u
-	}
-
-	return nil
-}
-
-func deleteSession(store *webutil.SessionStore, session string, keeperr bool) {
+func deleteSession(store webutil.SessionStore[*upstreamConfig], session string, keeperr bool) {
 	store.Reset(session, keeperr)
 }
 
@@ -295,11 +283,11 @@ var sessionRegexp = regexp.MustCompile(`^[A-Za-z0-9-]+$`)
 
 type appWeb struct {
 	*webutil.WebApp
-	store *webutil.SessionStore
+	store webutil.SessionStore[*upstreamConfig]
 	oauth *oauth2.Config
 }
 
-func newWeb(oauth *oauth2.Config, store *webutil.SessionStore) (*appWeb, error) {
+func newWeb(oauth *oauth2.Config, store webutil.SessionStore[*upstreamConfig]) (*appWeb, error) {
 	app := webutil.NewWebApp()
 	app.LoadTemplate()
 
@@ -346,7 +334,7 @@ func (w *appWeb) approve(c *gin.Context) {
 		KnownHostsData: c.PostForm("knownhosts"),
 	}
 
-	setUpstream(w.store, session, upstreamConfig)
+	w.store.SetUpstream(session, upstreamConfig)
 
 	var errors []string
 	var infos []string

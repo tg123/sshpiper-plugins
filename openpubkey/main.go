@@ -64,7 +64,7 @@ func main() {
 		},
 		CreateConfig: func(c *cli.Context) (*libplugin.SshPiperPluginConfig, error) {
 
-			store := webutil.NewSessionStore()
+			store := webutil.NewSessionStore[string]()
 
 			baseurl := c.String("baseurl")
 			issuerurl := c.String("issuerurl")
@@ -80,7 +80,12 @@ func main() {
 				return nil, err
 			}
 
-			webutil.RunWebServer(w, c.String("webaddr"), false)
+			webaddr := c.String("webaddr")
+			go func() {
+				if err := w.Run(webaddr); err != nil {
+					log.WithError(err).Error("web server exited")
+				}
+			}()
 
 			limiter, err := memorystore.New(&memorystore.Config{
 				Tokens:      3,
@@ -155,7 +160,7 @@ func main() {
 							return nil, fmt.Errorf("%s", *lasterr)
 						}
 
-						upstream := getUpstream(store, session)
+						upstream := store.GetUpstream(session)
 						if upstream == "" {
 							time.Sleep(time.Millisecond * 100)
 							continue
@@ -242,26 +247,15 @@ func notifyClient(client libplugin.KeyboardInteractiveChallenge, message string)
 	}
 }
 
-func setNonce(store *webutil.SessionStore, session string, nonce []byte) {
+func setNonce(store webutil.SessionStore[string], session string, nonce []byte) {
 	store.SetBytes(session, "nonce", nonce)
 }
 
-func getNonce(store *webutil.SessionStore, session string) []byte {
+func getNonce(store webutil.SessionStore[string], session string) []byte {
 	return store.GetBytes(session, "nonce")
 }
 
-func setUpstream(store *webutil.SessionStore, session, upstream string) {
-	store.SetString(session, webutil.KeyUpstream, upstream)
-}
-
-func getUpstream(store *webutil.SessionStore, session string) string {
-	if v, ok := store.GetString(session, webutil.KeyUpstream); ok {
-		return v
-	}
-	return ""
-}
-
-func deleteSession(store *webutil.SessionStore, session string, keeperr bool) {
+func deleteSession(store webutil.SessionStore[string], session string, keeperr bool) {
 	store.Reset(session, keeperr, "nonce")
 }
 
@@ -271,7 +265,7 @@ const nonceKey contextKey = "nonce"
 
 type opkWeb struct {
 	*webutil.WebApp
-	store *webutil.SessionStore
+	store webutil.SessionStore[string]
 
 	provider rp.RelyingParty
 }
@@ -283,7 +277,7 @@ type oidcconfig struct {
 	issuer       string
 }
 
-func newWeb(config oidcconfig, store *webutil.SessionStore) (*opkWeb, error) {
+func newWeb(config oidcconfig, store webutil.SessionStore[string]) (*opkWeb, error) {
 	app := webutil.NewWebApp()
 	app.LoadTemplate()
 
@@ -355,7 +349,7 @@ func (w *opkWeb) approve(c *gin.Context) {
 		return
 	}
 
-	setUpstream(w.store, session, upstream)
+	w.store.SetUpstream(session, upstream)
 
 	c.JSON(http.StatusOK, gin.H{
 		"status": "ok",

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	log "github.com/sirupsen/logrus"
 	"github.com/tg123/sshpiper-plugins/internal/web"
 	"github.com/tg123/sshpiper/libplugin"
 	"github.com/urfave/cli/v2"
@@ -20,24 +21,13 @@ const (
 	approvalPollInterval = 100 * time.Millisecond
 )
 
-func setUpstream(store *web.SessionStore, session, upstream string) {
-	store.SetString(session, web.KeyUpstream, upstream)
-}
-
-func getUpstream(store *web.SessionStore, session string) string {
-	if v, ok := store.GetString(session, web.KeyUpstream); ok {
-		return v
-	}
-	return ""
-}
-
-func deleteSession(store *web.SessionStore, session string, keeperr bool) {
+func deleteSession(store web.SessionStore[string], session string, keeperr bool) {
 	store.Reset(session, keeperr)
 }
 
 type approverWeb struct {
 	*web.WebApp
-	store *web.SessionStore
+	store web.SessionStore[string]
 }
 
 const (
@@ -45,7 +35,7 @@ const (
 	headerUpstream = "X-SSHPIPER-UPSTREAM"
 )
 
-func newApproverWeb(store *web.SessionStore) *approverWeb {
+func newApproverWeb(store web.SessionStore[string]) *approverWeb {
 	app := web.NewWebApp()
 	w := &approverWeb{
 		WebApp: app,
@@ -75,7 +65,7 @@ func (w *approverWeb) approve(c *gin.Context) {
 		return
 	}
 
-	setUpstream(w.store, session, upstream)
+	w.store.SetUpstream(session, upstream)
 	w.store.SetSshError(session, errMsgPipeApprove)
 
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
@@ -125,12 +115,17 @@ func main() {
 		},
 		CreateConfig: func(c *cli.Context) (*libplugin.SshPiperPluginConfig, error) {
 
-			store := web.NewSessionStore()
+			store := web.NewSessionStore[string]()
 
 			baseurl := c.String("baseurl")
 
 			w := newApproverWeb(store)
-			web.RunWebServer(w, c.String("webaddr"), false)
+			webaddr := c.String("webaddr")
+			go func() {
+				if err := w.Run(webaddr); err != nil {
+					log.WithError(err).Error("web server exited")
+				}
+			}()
 
 			return &libplugin.SshPiperPluginConfig{
 				KeyboardInteractiveCallback: func(conn libplugin.ConnMetadata, client libplugin.KeyboardInteractiveChallenge) (u *libplugin.Upstream, err error) {
@@ -158,7 +153,7 @@ func main() {
 							return nil, fmt.Errorf("timeout waiting for approval")
 						}
 
-						up := getUpstream(store, session)
+						up := store.GetUpstream(session)
 						if up == "" {
 							time.Sleep(approvalPollInterval)
 							continue

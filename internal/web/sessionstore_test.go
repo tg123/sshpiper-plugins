@@ -7,7 +7,7 @@ type sample struct {
 }
 
 func TestSessionStore(t *testing.T) {
-	store := NewSessionStore()
+	store := NewSessionStore[string]()
 
 	store.SetBytes("s1", "secret", []byte{1, 2, 3})
 	if got := store.GetBytes("s1", "secret"); len(got) != 3 || got[0] != 1 {
@@ -39,7 +39,7 @@ func TestSessionStore(t *testing.T) {
 }
 
 func TestSessionStoreSshError(t *testing.T) {
-	store := NewSessionStore()
+	store := NewSessionStore[string]()
 
 	if got := store.GetSshError("s1"); got != nil {
 		t.Fatalf("GetSshError() unset = %v, want nil", got)
@@ -62,7 +62,7 @@ func TestSessionStoreSshError(t *testing.T) {
 }
 
 func TestSessionStoreReset(t *testing.T) {
-	store := NewSessionStore()
+	store := NewSessionStore[string]()
 
 	store.SetSecret("s1", []byte("topsecret"))
 	store.SetString("s1", KeyUpstream, "host:22")
@@ -92,5 +92,26 @@ func TestSessionStoreReset(t *testing.T) {
 	}
 	if got := store.GetSshError("s1"); got != nil {
 		t.Fatalf("Reset(keeperr=false) left ssh error = %v", got)
+	}
+}
+
+func TestSessionStoreUpstream(t *testing.T) {
+	type cfg struct{ Host string }
+
+	store := NewSessionStore[*cfg]()
+	if got := store.GetUpstream("s1"); got != nil {
+		t.Fatalf("GetUpstream() unset = %v, want nil", got)
+	}
+
+	want := &cfg{Host: "example.com"}
+	store.SetUpstream("s1", want)
+	if got := store.GetUpstream("s1"); got != want {
+		t.Fatalf("GetUpstream() = %v, want %v", got, want)
+	}
+
+	sstore := NewSessionStore[string]()
+	sstore.SetUpstream("s1", "host:22")
+	if got := sstore.GetUpstream("s1"); got != "host:22" {
+		t.Fatalf("GetUpstream() = %q, want %q", got, "host:22")
 	}
 }

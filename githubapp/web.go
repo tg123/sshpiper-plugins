@@ -38,39 +38,33 @@ func deleteSession(store *webutil.SessionStore, session string, keeperr bool) {
 
 const appurl = "https://github.com/apps/sshpiper"
 
-const templatefile = "web.tmpl"
-
 var sessionRegexp = regexp.MustCompile(`^[A-Za-z0-9-]+$`)
 
 type appWeb struct {
+	*webutil.WebApp
 	store *webutil.SessionStore
 	oauth *oauth2.Config
-	r     *gin.Engine
 }
 
 func newWeb(oauth *oauth2.Config, store *webutil.SessionStore) (*appWeb, error) {
-	r := gin.Default()
-	r.LoadHTMLFiles(templatefile)
+	app := webutil.NewWebApp()
+	app.LoadTemplate()
 
 	w := &appWeb{
-		r:     r,
-		oauth: oauth,
-		store: store,
+		WebApp: app,
+		oauth:  oauth,
+		store:  store,
 	}
 
-	r.GET("/", func(c *gin.Context) {
+	app.GET("/", func(c *gin.Context) {
 		c.Redirect(http.StatusTemporaryRedirect, appurl)
 	})
 
-	r.GET("/pipe/:session", w.pipe)
-	r.GET("/oauth2callback", w.oauth2callback)
-	r.POST("/approve/:session", w.approve)
+	app.GET("/pipe/:session", w.pipe)
+	app.GET("/oauth2callback", w.oauth2callback)
+	app.POST("/approve/:session", w.approve)
 
 	return w, nil
-}
-
-func (w *appWeb) Run(addr string) error {
-	return w.r.Run(addr)
 }
 
 func (w *appWeb) pipe(c *gin.Context) {
@@ -127,7 +121,7 @@ func (w *appWeb) approve(c *gin.Context) {
 		break
 	}
 
-	c.HTML(http.StatusOK, templatefile, gin.H{
+	c.HTML(http.StatusOK, webutil.TemplateFile, gin.H{
 		"errors": errors,
 		"infos":  infos,
 	})
@@ -145,7 +139,7 @@ func (w *appWeb) oauth2callback(c *gin.Context) {
 	token, err := w.oauth.Exchange(context.Background(), code)
 
 	if err != nil {
-		c.HTML(http.StatusOK, templatefile, gin.H{
+		c.HTML(http.StatusOK, webutil.TemplateFile, gin.H{
 			"errors": []string{err.Error()},
 		})
 		return
@@ -159,7 +153,7 @@ func (w *appWeb) oauth2callback(c *gin.Context) {
 	})
 
 	if err != nil {
-		c.HTML(http.StatusOK, templatefile, gin.H{
+		c.HTML(http.StatusOK, webutil.TemplateFile, gin.H{
 			"errors": []string{err.Error()},
 		})
 		return
@@ -227,7 +221,7 @@ func (w *appWeb) oauth2callback(c *gin.Context) {
 		errors = append(errors, "no valid upstreams found in sshpiper.yaml, please check sshpiper.yaml")
 	}
 
-	c.HTML(http.StatusOK, templatefile, gin.H{
+	c.HTML(http.StatusOK, webutil.TemplateFile, gin.H{
 		"upstreams": upstreams,
 		"session":   session,
 		"errors":    errors,

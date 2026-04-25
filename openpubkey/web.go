@@ -34,18 +34,17 @@ func deleteSession(store *webutil.SessionStore, session string, keeperr bool) {
 	store.Reset(session, keeperr, "nonce")
 }
 
-const templatefile = "web.tmpl"
+const templatefile = webutil.TemplateFile
 
 type contextKey string
 
 const nonceKey contextKey = "nonce"
 
 type opkWeb struct {
+	*webutil.WebApp
 	store *webutil.SessionStore
 
 	provider rp.RelyingParty
-
-	r *gin.Engine
 }
 
 type oidcconfig struct {
@@ -56,8 +55,8 @@ type oidcconfig struct {
 }
 
 func newWeb(config oidcconfig, store *webutil.SessionStore) (*opkWeb, error) {
-	r := gin.Default()
-	r.LoadHTMLFiles(templatefile)
+	app := webutil.NewWebApp()
+	app.LoadTemplate()
 
 	provider, err := rp.NewRelyingPartyOIDC(
 		config.issuer,
@@ -74,26 +73,22 @@ func newWeb(config oidcconfig, store *webutil.SessionStore) (*opkWeb, error) {
 	}
 
 	w := &opkWeb{
-		r:        r,
+		WebApp:   app,
 		store:    store,
 		provider: provider,
 	}
 
-	r.GET("/", func(c *gin.Context) {
+	app.GET("/", func(c *gin.Context) {
 		c.HTML(http.StatusOK, templatefile, gin.H{
 			"session": "",
 		})
 	})
-	r.GET("/pipe/:session", w.pipe)
-	r.GET("/lasterr/:session", w.lasterr)
-	r.GET("/login-callback", w.loginCallback)
-	r.POST("/approve", w.approve)
+	app.GET("/pipe/:session", w.pipe)
+	app.GET("/lasterr/:session", w.lasterr)
+	app.GET("/login-callback", w.loginCallback)
+	app.POST("/approve", w.approve)
 
 	return w, nil
-}
-
-func (w *opkWeb) Run(addr string) error {
-	return w.r.Run(addr)
 }
 
 func (w *opkWeb) approve(c *gin.Context) {

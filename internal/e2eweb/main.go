@@ -36,8 +36,8 @@ func deleteSession(store *web.SessionStore, session string, keeperr bool) {
 }
 
 type approverWeb struct {
+	*web.WebApp
 	store *web.SessionStore
-	r     *gin.Engine
 }
 
 const (
@@ -46,18 +46,14 @@ const (
 )
 
 func newApproverWeb(store *web.SessionStore) *approverWeb {
-	r := gin.Default()
+	app := web.NewWebApp()
 	w := &approverWeb{
-		store: store,
-		r:     r,
+		WebApp: app,
+		store:  store,
 	}
 
-	r.POST("/approve", w.approve)
+	app.POST("/approve", w.approve)
 	return w
-}
-
-func (w *approverWeb) Run(addr string) error {
-	return w.r.Run(addr)
 }
 
 func (w *approverWeb) approve(c *gin.Context) {

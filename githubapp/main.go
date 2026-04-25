@@ -9,24 +9,29 @@ import (
 	"fmt"
 	"math/big"
 	"net"
+	"net/http"
 	"os"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/go-github/v50/github"
 	"github.com/sethvargo/go-limiter/memorystore"
 	log "github.com/sirupsen/logrus"
+	webutil "github.com/tg123/sshpiper-plugins/internal/web"
 	"github.com/tg123/sshpiper/libplugin"
 	"github.com/tg123/sshpiper/libplugin/skel"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/oauth2"
 	githubendpoint "golang.org/x/oauth2/github"
+	"gopkg.in/yaml.v3"
 )
 
 const errMsgPipeApprove = "ok"
 const errMsgBadUpstreamCred = "bad upstream credential"
 
 func main() {
-
 	gin.DefaultWriter = os.Stderr
 
 	libplugin.CreateAndRunPluginTemplate(&libplugin.PluginTemplate{
@@ -56,10 +61,7 @@ func main() {
 		},
 		CreateConfig: func(c *cli.Context) (*libplugin.SshPiperPluginConfig, error) {
 
-			store, err := newSessionstoreMemory()
-			if err != nil {
-				return nil, err
-			}
+			store := webutil.NewSessionStore[*upstreamConfig]()
 
 			baseurl := c.String("baseurl")
 
@@ -74,9 +76,10 @@ func main() {
 				return nil, err
 			}
 
+			webaddr := c.String("webaddr")
 			go func() {
-				if err := w.Run(c.String("webaddr")); err != nil {
-					log.WithError(err).Fatal("githubapp web server exited")
+				if err := w.Run(webaddr); err != nil {
+					log.WithError(err).Fatal("web server exited")
 				}
 			}()
 
@@ -106,7 +109,7 @@ func main() {
 
 					if lasterr == nil {
 						// new session
-						_, _ = client("", fmt.Sprintf("please open %v/pipe/%v with your browser to verify (timeout 1m)", baseurl, session), "", false)
+						webutil.PromptPipe(client, baseurl, session)
 						store.SetSshError(session, "") // set waiting for approval
 
 					} else if *lasterr != "" {
@@ -128,13 +131,13 @@ func main() {
 							return nil, fmt.Errorf("timeout waiting for approval")
 						}
 
-						upstream, _ := store.GetUpstream(session)
+						upstream := store.GetUpstream(session)
 						if upstream == nil {
 							time.Sleep(time.Millisecond * 100)
 							continue
 						}
 
-						key, _ := store.GetSecret(session)
+						key := store.GetSecret(session)
 						if key == nil {
 							return nil, fmt.Errorf("secret expired")
 						}
@@ -231,16 +234,16 @@ func main() {
 				UpstreamAuthFailureCallback: func(conn libplugin.ConnMetadata, method string, err error, allowmethods []string) {
 					session := conn.UniqueID()
 					store.SetSshError(session, err.Error())
-					store.DeleteSession(session, true)
+					deleteSession(store, session, true)
 				},
 				PipeStartCallback: func(conn libplugin.ConnMetadata) {
 					session := conn.UniqueID()
 					store.SetSshError(session, errMsgPipeApprove)
-					store.DeleteSession(session, true)
+					deleteSession(store, session, true)
 				},
 				PipeErrorCallback: func(conn libplugin.ConnMetadata, err error) {
 					session := conn.UniqueID()
-					store.DeleteSession(session, false)
+					deleteSession(store, session, false)
 
 					ip, _, _ := net.SplitHostPort(conn.RemoteAddr())
 					limiter.Burst(context.Background(), ip, 1)
@@ -248,7 +251,7 @@ func main() {
 				VerifyHostKeyCallback: func(conn libplugin.ConnMetadata, hostname, netaddr string, key []byte) error {
 					session := conn.UniqueID()
 
-					upstream, _ := store.GetUpstream(session)
+					upstream := store.GetUpstream(session)
 
 					if upstream == nil {
 						return fmt.Errorf("connection expired")
@@ -267,5 +270,201 @@ func main() {
 				},
 			}, nil
 		},
+	})
+}
+
+func deleteSession(store webutil.SessionStore[*upstreamConfig], session string, keeperr bool) {
+	store.Reset(session, keeperr)
+}
+
+const appurl = "https://github.com/apps/sshpiper"
+
+var sessionRegexp = regexp.MustCompile(`^[A-Za-z0-9-]+$`)
+
+type appWeb struct {
+	*webutil.WebApp
+	store webutil.SessionStore[*upstreamConfig]
+	oauth *oauth2.Config
+}
+
+func newWeb(oauth *oauth2.Config, store webutil.SessionStore[*upstreamConfig]) (*appWeb, error) {
+	app := webutil.NewWebApp()
+	app.LoadTemplate()
+
+	w := &appWeb{
+		WebApp: app,
+		oauth:  oauth,
+		store:  store,
+	}
+
+	app.GET("/", func(c *gin.Context) {
+		c.Redirect(http.StatusTemporaryRedirect, appurl)
+	})
+
+	app.GET("/pipe/:session", w.pipe)
+	app.GET("/oauth2callback", w.oauth2callback)
+	app.POST("/approve/:session", w.approve)
+
+	return w, nil
+}
+
+func (w *appWeb) pipe(c *gin.Context) {
+	session := c.Param("session")
+
+	if session == "" || !sessionRegexp.MatchString(session) {
+		c.Redirect(http.StatusTemporaryRedirect, appurl)
+		return
+	}
+
+	c.Redirect(http.StatusTemporaryRedirect, w.oauth.AuthCodeURL(session))
+}
+
+func (w *appWeb) approve(c *gin.Context) {
+	session := c.Param("session")
+	if session == "" || !sessionRegexp.MatchString(session) {
+		c.Redirect(http.StatusTemporaryRedirect, appurl)
+		return
+	}
+
+	upstreamConfig := &upstreamConfig{
+		Host:           c.PostForm("host"),
+		Username:       c.PostForm("username"),
+		Password:       c.PostForm("password"),
+		PrivateKeyData: c.PostForm("privatekey"),
+		KnownHostsData: c.PostForm("knownhosts"),
+	}
+
+	w.store.SetUpstream(session, upstreamConfig)
+
+	var errors []string
+	var infos []string
+	var errmsg *string
+
+	for {
+
+		errmsg = w.store.GetSshError(session)
+		if errmsg == nil {
+			errors = append(errors, "session expired")
+			break
+		}
+
+		if *errmsg == "" {
+			time.Sleep(time.Millisecond * 300)
+			continue
+		}
+
+		if *errmsg == errMsgPipeApprove {
+			infos = append(infos, "ssh pipe approved")
+		} else {
+			errors = append(errors, *errmsg)
+		}
+
+		break
+	}
+
+	c.HTML(http.StatusOK, webutil.TemplateFile, gin.H{
+		"errors": errors,
+		"infos":  infos,
+	})
+}
+
+func (w *appWeb) oauth2callback(c *gin.Context) {
+	code := c.Query("code")
+	session := c.Query("state")
+
+	if code == "" || session == "" || !sessionRegexp.MatchString(session) {
+		c.Redirect(http.StatusTemporaryRedirect, appurl)
+		return
+	}
+
+	token, err := w.oauth.Exchange(context.Background(), code)
+
+	if err != nil {
+		c.HTML(http.StatusOK, webutil.TemplateFile, gin.H{
+			"errors": []string{err.Error()},
+		})
+		return
+	}
+
+	tc := oauth2.NewClient(context.Background(), oauth2.StaticTokenSource(token))
+	client := github.NewClient(tc)
+
+	repos, _, err := client.Repositories.List(context.Background(), "", &github.RepositoryListOptions{
+		Visibility: "private",
+	})
+
+	if err != nil {
+		c.HTML(http.StatusOK, webutil.TemplateFile, gin.H{
+			"errors": []string{err.Error()},
+		})
+		return
+	}
+
+	key, err := randomkey()
+	if err != nil {
+		c.AbortWithError(http.StatusInternalServerError, err)
+		return
+	}
+
+	var upstreams []upstreamConfig
+
+	contentFound := false
+	var errors []string
+
+	for _, repo := range repos {
+		if repo.FullName == nil {
+			continue
+		}
+
+		fullname := strings.Split(*repo.FullName, "/")
+		if len(fullname) != 2 {
+			errors = append(errors, fmt.Sprintf("unexpected repo full name %q", *repo.FullName))
+			continue
+		}
+		owner := fullname[0]
+		reponame := fullname[1]
+		conf, _, _, err := client.Repositories.GetContents(context.Background(), owner, reponame, "sshpiper.yaml", nil)
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("failed to get sshpiper.yaml from %s/%s: %v", owner, reponame, err))
+			continue
+		}
+
+		content, err := conf.GetContent()
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("failed to decode sshpiper.yaml from %s/%s: %v", owner, reponame, err))
+			continue
+		}
+
+		contentFound = true
+
+		var config pipeConfig
+		if err := yaml.Unmarshal([]byte(content), &config); err != nil {
+			errors = append(errors, fmt.Sprintf("failed to parse sshpiper.yaml from %s/%s: %v", owner, reponame, err))
+		}
+
+		for _, upstream := range config.Upstreams {
+			upstream.Password, _ = encrypt(upstream.Password, key)
+			upstream.PrivateKeyData, _ = encrypt(upstream.PrivateKeyData, key)
+			upstream.Repo = *repo.FullName
+			upstreams = append(upstreams, upstream)
+		}
+	}
+
+	if len(upstreams) > 0 {
+		w.store.SetSecret(session, key)
+	}
+
+	if len(repos) == 0 {
+		errors = append(errors, "no private repositories found, please install github app to any of your private repositories")
+	} else if !contentFound {
+		errors = append(errors, "no sshpiper.yaml found in any private repositories, please add sshpiper.yaml")
+	} else if len(upstreams) == 0 {
+		errors = append(errors, "no valid upstreams found in sshpiper.yaml, please check sshpiper.yaml")
+	}
+
+	c.HTML(http.StatusOK, webutil.TemplateFile, gin.H{
+		"upstreams": upstreams,
+		"session":   session,
+		"errors":    errors,
 	})
 }

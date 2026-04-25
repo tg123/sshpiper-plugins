@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -12,8 +13,11 @@ import (
 	"github.com/openpubkey/openpubkey/util"
 	"github.com/sethvargo/go-limiter/memorystore"
 	log "github.com/sirupsen/logrus"
+	webutil "github.com/tg123/sshpiper-plugins/internal/web"
 	"github.com/tg123/sshpiper/libplugin"
 	"github.com/urfave/cli/v2"
+	"github.com/zitadel/oidc/v2/pkg/client/rp"
+	"github.com/zitadel/oidc/v2/pkg/oidc"
 )
 
 const errMsgPipeApprove = "ok"
@@ -60,10 +64,7 @@ func main() {
 		},
 		CreateConfig: func(c *cli.Context) (*libplugin.SshPiperPluginConfig, error) {
 
-			store, err := newSessionstoreMemory()
-			if err != nil {
-				return nil, err
-			}
+			store := webutil.NewSessionStore[string]()
 
 			baseurl := c.String("baseurl")
 			issuerurl := c.String("issuerurl")
@@ -79,9 +80,10 @@ func main() {
 				return nil, err
 			}
 
+			webaddr := c.String("webaddr")
 			go func() {
-				if err := w.Run(c.String("webaddr")); err != nil {
-					log.WithError(err).Error("openpubkey web server exited")
+				if err := w.Run(webaddr); err != nil {
+					log.WithError(err).Error("web server exited")
 				}
 			}()
 
@@ -141,9 +143,9 @@ func main() {
 						return nil, err
 					}
 
-					store.SetNonce(session, nonce)
+					setNonce(store, session, nonce)
 
-					notifyClient(client, fmt.Sprintf("please open %v/pipe/%v with your browser to verify (timeout 1m)", baseurl, session))
+					webutil.PromptPipe(client, baseurl, session)
 
 					st := time.Now()
 
@@ -158,13 +160,13 @@ func main() {
 							return nil, fmt.Errorf("%s", *lasterr)
 						}
 
-						upstream, _ := store.GetUpstream(session)
+						upstream := store.GetUpstream(session)
 						if upstream == "" {
 							time.Sleep(time.Millisecond * 100)
 							continue
 						}
 
-						token, _ := store.GetSecret(session)
+						token := store.GetSecret(session)
 						if token == nil {
 							return nil, fmt.Errorf("secret expired")
 						}
@@ -206,16 +208,16 @@ func main() {
 				UpstreamAuthFailureCallback: func(conn libplugin.ConnMetadata, method string, err error, allowmethods []string) {
 					session := conn.UniqueID()
 					store.SetSshError(session, err.Error())
-					store.DeleteSession(session, true)
+					deleteSession(store, session, true)
 				},
 				PipeStartCallback: func(conn libplugin.ConnMetadata) {
 					session := conn.UniqueID()
 					store.SetSshError(session, errMsgPipeApprove)
-					store.DeleteSession(session, true)
+					deleteSession(store, session, true)
 				},
 				PipeErrorCallback: func(conn libplugin.ConnMetadata, err error) {
 					session := conn.UniqueID()
-					store.DeleteSession(session, false)
+					deleteSession(store, session, false)
 
 					ip, _, _ := net.SplitHostPort(conn.RemoteAddr())
 					limiter.Burst(context.Background(), ip, 1)
@@ -243,4 +245,185 @@ func notifyClient(client libplugin.KeyboardInteractiveChallenge, message string)
 	if _, err := client("", message, "", false); err != nil {
 		log.WithError(err).Debug("failed to send interactive prompt")
 	}
+}
+
+func setNonce(store webutil.SessionStore[string], session string, nonce []byte) {
+	store.SetBytes(session, "nonce", nonce)
+}
+
+func getNonce(store webutil.SessionStore[string], session string) []byte {
+	return store.GetBytes(session, "nonce")
+}
+
+func deleteSession(store webutil.SessionStore[string], session string, keeperr bool) {
+	store.Reset(session, keeperr, "nonce")
+}
+
+type contextKey string
+
+const nonceKey contextKey = "nonce"
+
+type opkWeb struct {
+	*webutil.WebApp
+	store webutil.SessionStore[string]
+
+	provider rp.RelyingParty
+}
+
+type oidcconfig struct {
+	clientId     string
+	clientSecret string
+	baseurl      string
+	issuer       string
+}
+
+func newWeb(config oidcconfig, store webutil.SessionStore[string]) (*opkWeb, error) {
+	app := webutil.NewWebApp()
+	app.LoadTemplate()
+
+	provider, err := rp.NewRelyingPartyOIDC(
+		config.issuer,
+		config.clientId,
+		config.clientSecret,
+		fmt.Sprintf("%s/login-callback", config.baseurl),
+		[]string{"openid", "profile", "email"},
+		rp.WithVerifierOpts(
+			rp.WithNonce(func(ctx context.Context) string { return ctx.Value(nonceKey).(string) }),
+		),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("error creating provider: %w", err)
+	}
+
+	w := &opkWeb{
+		WebApp:   app,
+		store:    store,
+		provider: provider,
+	}
+
+	app.GET("/", func(c *gin.Context) {
+		c.HTML(http.StatusOK, webutil.TemplateFile, gin.H{
+			"session": "",
+		})
+	})
+	app.GET("/pipe/:session", w.pipe)
+	app.GET("/lasterr/:session", w.lasterr)
+	app.GET("/login-callback", w.loginCallback)
+	app.POST("/approve", w.approve)
+
+	return w, nil
+}
+
+func (w *opkWeb) approve(c *gin.Context) {
+	session := c.PostForm("session")
+	if session == "" {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  "missing session",
+		})
+		return
+	}
+
+	if secret := w.store.GetSecret(session); secret == nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  "invalid or expired session",
+		})
+		return
+	}
+
+	upstream := c.PostForm("upstream")
+	if upstream == "" {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  "missing upstream",
+		})
+		return
+	}
+
+	if _, err := parseUpstream(upstream); err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  "invalid upstream",
+		})
+		return
+	}
+
+	w.store.SetUpstream(session, upstream)
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "ok",
+	})
+}
+
+func (w *opkWeb) lasterr(c *gin.Context) {
+	session := c.Param("session")
+
+	errmsg := w.store.GetSshError(session)
+	if errmsg == nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "unknown",
+		})
+		return
+	}
+
+	if *errmsg == "" {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "unknown",
+		})
+		return
+	}
+
+	if *errmsg == errMsgPipeApprove {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "approved",
+		})
+	} else {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "error",
+			"error":  *errmsg,
+		})
+	}
+}
+
+func (w *opkWeb) pipe(c *gin.Context) {
+	session := c.Param("session")
+
+	if session == "" {
+		c.AbortWithError(http.StatusBadRequest, fmt.Errorf("missing session"))
+		return
+	}
+
+	nonce := getNonce(w.store, session)
+	if nonce == nil {
+		c.AbortWithError(http.StatusBadRequest, fmt.Errorf("session expired"))
+		return
+	}
+
+	url := rp.AuthURL(session, w.provider, rp.AuthURLOpt(rp.WithURLParam("nonce", string(nonce))))
+
+	c.Redirect(http.StatusTemporaryRedirect, url)
+}
+
+func (w *opkWeb) loginCallback(c *gin.Context) {
+	session := c.Query("state")
+	if session == "" {
+		c.AbortWithError(http.StatusBadRequest, fmt.Errorf("missing session"))
+		return
+	}
+
+	nonce := getNonce(w.store, session)
+	if nonce == nil {
+		c.AbortWithError(http.StatusBadRequest, fmt.Errorf("session expired"))
+		return
+	}
+
+	codeExchangeHandler := func(_ http.ResponseWriter, _ *http.Request, tokens *oidc.Tokens[*oidc.IDTokenClaims], _ string, _ rp.RelyingParty) {
+		w.store.SetSecret(session, []byte(tokens.IDToken))
+		c.HTML(http.StatusOK, webutil.TemplateFile, gin.H{
+			"session": session,
+		})
+	}
+
+	rp.CodeExchangeHandler(codeExchangeHandler, w.provider)(c.Writer, c.Request.WithContext(context.WithValue(c.Request.Context(), nonceKey, string(nonce))))
 }

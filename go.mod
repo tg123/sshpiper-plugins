@@ -2,7 +2,7 @@ module github.com/tg123/sshpiper-plugins
 
 go 1.26
 
-replace golang.org/x/crypto => github.com/tg123/sshpiper.crypto v0.45.0-sshpiper-20251119
+replace golang.org/x/crypto => github.com/tg123/sshpiper.crypto v0.48.0-sshpiper-20260209
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.16.0
@@ -20,11 +20,11 @@ require (
 	github.com/openpubkey/openpubkey v0.2.2-0.20240119034148-208668c042c1
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/sethvargo/go-limiter v0.7.2
-	github.com/sirupsen/logrus v1.9.3
-	github.com/tg123/sshpiper v1.5.1
+	github.com/sirupsen/logrus v1.9.4
+	github.com/tg123/sshpiper v1.5.3
 	github.com/urfave/cli/v2 v2.27.7
 	github.com/zitadel/oidc/v2 v2.12.0
-	golang.org/x/crypto v0.45.0
+	golang.org/x/crypto v0.48.0
 	golang.org/x/oauth2 v0.32.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -95,11 +95,11 @@ require (
 	go.opentelemetry.io/otel/metric v1.38.0 // indirect
 	go.opentelemetry.io/otel/trace v1.38.0 // indirect
 	golang.org/x/arch v0.3.0 // indirect
-	golang.org/x/net v0.47.0 // indirect
-	golang.org/x/sys v0.38.0 // indirect
-	golang.org/x/text v0.31.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20251022142026-3a174f9686a8 // indirect
-	google.golang.org/grpc v1.77.0 // indirect
-	google.golang.org/protobuf v1.36.10 // indirect
+	golang.org/x/net v0.49.0 // indirect
+	golang.org/x/sys v0.41.0 // indirect
+	golang.org/x/text v0.34.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20251029180050-ab9386a59fda // indirect
+	google.golang.org/grpc v1.78.0 // indirect
+	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/square/go-jose.v2 v2.6.0 // indirect
 )

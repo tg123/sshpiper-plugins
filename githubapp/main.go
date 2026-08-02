@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
 	"net"
 	"os"
@@ -16,8 +17,9 @@ import (
 	"github.com/sethvargo/go-limiter/memorystore"
 	log "github.com/sirupsen/logrus"
 	"github.com/tg123/sshpiper/libplugin"
-	"github.com/tg123/sshpiper/libplugin/skel"
 	"github.com/urfave/cli/v2"
+	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/knownhosts"
 	"golang.org/x/oauth2"
 	githubendpoint "golang.org/x/oauth2/github"
 )
@@ -263,9 +265,31 @@ func main() {
 						return err
 					}
 
-					return skel.VerifyHostKeyFromKnownHosts(bytes.NewBuffer(data), hostname, netaddr, key)
+					return verifyHostKeyFromKnownHosts(bytes.NewBuffer(data), hostname, netaddr, key)
 				},
 			}, nil
 		},
 	})
+}
+
+// verifyHostKeyFromKnownHosts verifies key against the known_hosts data for
+// hostname/netaddr. This mirrors the helper that sshpiper's skel package
+// provided prior to v1.6.0.
+func verifyHostKeyFromKnownHosts(knownhostsData io.Reader, hostname, netaddr string, key []byte) error {
+	hostKeyCallback, err := knownhosts.NewFromReader(knownhostsData)
+	if err != nil {
+		return err
+	}
+
+	pub, err := ssh.ParsePublicKey(key)
+	if err != nil {
+		return err
+	}
+
+	addr, err := net.ResolveTCPAddr("tcp", netaddr)
+	if err != nil {
+		return err
+	}
+
+	return hostKeyCallback(hostname, addr, pub)
 }

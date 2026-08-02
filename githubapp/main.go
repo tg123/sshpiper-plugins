@@ -1,13 +1,11 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	crand "crypto/rand"
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"io"
 	"math/big"
 	"net"
 	"os"
@@ -18,8 +16,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/tg123/sshpiper/libplugin"
 	"github.com/urfave/cli/v2"
-	"golang.org/x/crypto/ssh"
-	"golang.org/x/crypto/ssh/knownhosts"
 	"golang.org/x/oauth2"
 	githubendpoint "golang.org/x/oauth2/github"
 )
@@ -176,10 +172,18 @@ func main() {
 						}
 
 						u = &libplugin.Upstream{
-							UserName:      upstream.Username,
-							Host:          selectedip,
-							Port:          int32(port),
-							IgnoreHostKey: upstream.KnownHostsData == "",
+							UserName: upstream.Username,
+							Host:     selectedip,
+							Port:     int32(port),
+						}
+
+						if upstream.KnownHostsData != "" {
+							knownHostsData, err := base64.StdEncoding.DecodeString(upstream.KnownHostsData)
+							if err != nil {
+								return nil, err
+							}
+
+							u.KnownHostsData = knownHostsData
 						}
 
 						password, _ := decrypt(upstream.Password, key)
@@ -247,49 +251,7 @@ func main() {
 					ip, _, _ := net.SplitHostPort(conn.RemoteAddr())
 					limiter.Burst(context.Background(), ip, 1)
 				},
-				VerifyHostKeyCallback: func(conn libplugin.ConnMetadata, hostname, netaddr string, key []byte) error {
-					session := conn.UniqueID()
-
-					upstream, _ := store.GetUpstream(session)
-
-					if upstream == nil {
-						return fmt.Errorf("connection expired")
-					}
-
-					if upstream.KnownHostsData == "" {
-						return nil
-					}
-
-					data, err := base64.StdEncoding.DecodeString(upstream.KnownHostsData)
-					if err != nil {
-						return err
-					}
-
-					return verifyHostKeyFromKnownHosts(bytes.NewBuffer(data), hostname, netaddr, key)
-				},
 			}, nil
 		},
 	})
-}
-
-// verifyHostKeyFromKnownHosts verifies key against the known_hosts data for
-// hostname/netaddr. This mirrors the helper that sshpiper's skel package
-// provided prior to v1.6.0.
-func verifyHostKeyFromKnownHosts(knownhostsData io.Reader, hostname, netaddr string, key []byte) error {
-	hostKeyCallback, err := knownhosts.NewFromReader(knownhostsData)
-	if err != nil {
-		return err
-	}
-
-	pub, err := ssh.ParsePublicKey(key)
-	if err != nil {
-		return err
-	}
-
-	addr, err := net.ResolveTCPAddr("tcp", netaddr)
-	if err != nil {
-		return err
-	}
-
-	return hostKeyCallback(hostname, addr, pub)
 }

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	crand "crypto/rand"
 	"encoding/base64"
@@ -16,7 +15,6 @@ import (
 	"github.com/sethvargo/go-limiter/memorystore"
 	log "github.com/sirupsen/logrus"
 	"github.com/tg123/sshpiper/libplugin"
-	"github.com/tg123/sshpiper/libplugin/skel"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/oauth2"
 	githubendpoint "golang.org/x/oauth2/github"
@@ -174,10 +172,18 @@ func main() {
 						}
 
 						u = &libplugin.Upstream{
-							UserName:      upstream.Username,
-							Host:          selectedip,
-							Port:          int32(port),
-							IgnoreHostKey: upstream.KnownHostsData == "",
+							UserName: upstream.Username,
+							Host:     selectedip,
+							Port:     int32(port),
+						}
+
+						if upstream.KnownHostsData != "" {
+							knownHostsData, err := base64.StdEncoding.DecodeString(upstream.KnownHostsData)
+							if err != nil {
+								return nil, err
+							}
+
+							u.KnownHostsData = knownHostsData
 						}
 
 						password, _ := decrypt(upstream.Password, key)
@@ -244,26 +250,6 @@ func main() {
 
 					ip, _, _ := net.SplitHostPort(conn.RemoteAddr())
 					limiter.Burst(context.Background(), ip, 1)
-				},
-				VerifyHostKeyCallback: func(conn libplugin.ConnMetadata, hostname, netaddr string, key []byte) error {
-					session := conn.UniqueID()
-
-					upstream, _ := store.GetUpstream(session)
-
-					if upstream == nil {
-						return fmt.Errorf("connection expired")
-					}
-
-					if upstream.KnownHostsData == "" {
-						return nil
-					}
-
-					data, err := base64.StdEncoding.DecodeString(upstream.KnownHostsData)
-					if err != nil {
-						return err
-					}
-
-					return skel.VerifyHostKeyFromKnownHosts(bytes.NewBuffer(data), hostname, netaddr, key)
 				},
 			}, nil
 		},
